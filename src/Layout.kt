@@ -1,4 +1,5 @@
 import java.awt.Font
+import java.awt.font.FontRenderContext
 
 data class DisplayElement(
     val x: Int,
@@ -24,6 +25,7 @@ class Layout(
     var bold = false
     var italic = false
     val line = mutableListOf<LineElement>()
+    val contentHeight get() = cursorY
 
     init {
         recuse(node)
@@ -59,23 +61,23 @@ class Layout(
         word: String,
         font: Font,
     ) {
-        val width = font.getStringBounds(word, null).width.toInt()
+        val width = font.getStringBounds(word, FontRenderContext(null, true, true)).width.toInt()
         if (cursorX + width > this.width - HSTEP) {
             flush()
         }
         line.add(LineElement(cursorX, word, font))
-        cursorX += width + font.getStringBounds(" ", null).width.toInt()
+        cursorX += width + font.getStringBounds(" ", FontRenderContext(null, true, true)).width.toInt()
     }
 
     fun flush() {
         if (line.isEmpty()) {
             return
         }
-        val metrics = line.map { it.font.getLineMetrics(it.text, null) }
+        val metrics = line.map { it.font.getLineMetrics(it.text, FontRenderContext(null, true, true)) }
         val maxAscent = metrics.maxOfOrNull { it.ascent } ?: 0f
         val baseline = cursorY + (1.25f * maxAscent).toInt()
         line.forEach { (x, text, font) ->
-            val ascent = font.getLineMetrics(text, null).ascent
+            val ascent = font.getLineMetrics(text, FontRenderContext(null, true, true)).ascent
             val y = baseline - ascent.toInt()
             displayList.add(DisplayElement(x, y, text, font))
         }

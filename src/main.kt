@@ -10,27 +10,20 @@ fun main() {
     window.setSize(800, 600)
     window.layout = BorderLayout()
 
+    // Create canvas
+    val canvas = BrowserCanvas()
+    canvas.background = Color.WHITE
+
     // Create address bar panel
     val addressBar = Panel(FlowLayout(FlowLayout.LEFT))
     val urlLabel = Label("URL:")
     val urlField = TextField(50) // Set width for the text field
-    urlField.addActionListener { load(urlField.text) }
+    urlField.addActionListener { canvas.load(urlField.text) }
     val button = Button("Go!")
-    button.addActionListener { load(urlField.text) }
+    button.addActionListener { canvas.load(urlField.text) }
     addressBar.add(urlLabel)
     addressBar.add(urlField)
     addressBar.add(button)
-
-    // Create canvas
-    val canvas = Canvas()
-    canvas.background = Color.WHITE
-    canvas.addComponentListener(
-        object : ComponentAdapter() {
-            override fun componentResized(e: ComponentEvent) {
-                println("Canvas resized: ${e.component.width}x${e.component.height}")
-            }
-        },
-    )
 
     // Add components to window using BorderLayout
     window.add(addressBar, BorderLayout.NORTH)
@@ -47,8 +40,69 @@ fun main() {
     window.isVisible = true
 }
 
-fun load(url: String) {
-    println("Loading: $url")
-    val response = HttpClient(url).get()
-    println(response)
+class BrowserCanvas : Canvas() {
+    private var displayList: List<DisplayElement> = mutableListOf()
+    private var contentHeight = 0
+    private var scroll = 0
+    private var root: Node? = null
+
+    init {
+        addComponentListener(
+            object : ComponentAdapter() {
+                override fun componentResized(e: ComponentEvent) {
+                    if (root == null) {
+                        return
+                    }
+                    val layout = Layout(root!!, width)
+                    displayList = layout.displayList
+                    contentHeight = layout.contentHeight
+                    repaint()
+                }
+            },
+        )
+
+        addMouseWheelListener {
+            scroll += it.wheelRotation * 10
+            repaint()
+        }
+    }
+
+    override fun paint(g: Graphics) {
+        super.paint(g)
+        drawContent(g)
+        drawScrollbar(g)
+    }
+
+    private fun drawContent(g: Graphics) {
+        displayList.forEach { (x, y, text, font) ->
+            if (y > scroll + height) {
+                return
+            }
+            if (y + 18 < scroll) {
+                return
+            }
+            g.font = font
+            g.drawString(text, x, y)
+        }
+    }
+
+    private fun drawScrollbar(g: Graphics) {
+        if (contentHeight <= height) {
+            return
+        }
+        val relativePageHeight = height.toDouble() / contentHeight.toDouble()
+        val scrollbarHeight = (height * relativePageHeight).toInt()
+        val scrollbarY = scroll / contentHeight.toDouble() * height
+        g.color = Color.BLUE
+        g.fillRect(width - 12, scrollbarY.toInt(), 8, scrollbarHeight)
+    }
+
+    fun load(url: String) {
+        val response = HttpClient(url).get()
+        root = HtmlParser(response.body).parse()
+        val layout = Layout(root!!, width)
+        displayList = layout.displayList
+        contentHeight = layout.contentHeight
+        repaint()
+    }
 }
