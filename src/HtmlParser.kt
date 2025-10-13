@@ -75,7 +75,7 @@ open class HtmlParser(
         return finish()
     }
 
-    private fun addText(text: String) {
+    protected open fun addText(text: String) {
         if (text.isBlank()) {
             return
         }
@@ -84,7 +84,7 @@ open class HtmlParser(
         parent.children.add(node)
     }
 
-    private fun addTag(tag: String) {
+    protected open fun addTag(tag: String) {
         if (tag.startsWith("!")) {
             return
         }
@@ -122,7 +122,7 @@ open class HtmlParser(
         return Pair(tag, attrs)
     }
 
-    private fun finish(): Node {
+    protected open fun finish(): Node {
         while (unfinished.size > 1) {
             val node = unfinished.removeLast()
             val parent = unfinished.last()
@@ -146,45 +146,7 @@ class ViewSourceHtmlParser(
 ) : HtmlParser(html) {
     private val root = Element("html")
 
-    override fun parse(): Node {
-        var text = ""
-        var entity = ""
-        var inTag = false
-        var inEntity = false
-
-        for (char in html) {
-            if (char == '<') {
-                inTag = true
-                if (text.isNotEmpty()) {
-                    addText(text)
-                }
-                text = ""
-            } else if (char == '>') {
-                inTag = false
-                addTag(text)
-                text = ""
-            } else if (!inTag && char == '&') {
-                inEntity = true
-            } else if (inEntity) {
-                if (char == ';') {
-                    text += getEntity(entity)
-                    inEntity = false
-                    entity = ""
-                } else {
-                    entity += char
-                }
-            } else {
-                text += char
-            }
-        }
-        if (!inTag && text.isNotEmpty()) {
-            addText(text)
-        }
-
-        return root
-    }
-
-    private fun addText(text: String) {
+    override fun addText(text: String) {
         if (text.isBlank()) {
             return
         }
@@ -192,7 +154,9 @@ class ViewSourceHtmlParser(
         root.children.add(element)
     }
 
-    private fun addTag(tag: String) {
+    override fun addTag(tag: String) {
         root.children.add(Text("<$tag>", root))
     }
+
+    override fun finish(): Node = root
 }
