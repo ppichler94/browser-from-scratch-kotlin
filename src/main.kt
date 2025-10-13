@@ -41,7 +41,7 @@ fun main() {
 }
 
 class BrowserCanvas : Canvas() {
-    private var displayList: MutableList<DisplayElement> = mutableListOf()
+    private var displayList: MutableList<DrawCommand> = mutableListOf()
     private var contentHeight = 0
     private var scroll = 0
     private var root: Node? = null
@@ -76,17 +76,8 @@ class BrowserCanvas : Canvas() {
 
     override fun paint(g: Graphics) {
         super.paint(g)
-        drawContent(g)
+        displayList.forEach { it.paint(g, scroll) }
         drawScrollbar(g)
-    }
-
-    private fun drawContent(g: Graphics) {
-        displayList
-            .filter { it.y <= scroll + height && it.y + 18 >= scroll }
-            .forEach { (x, y, text, font) ->
-                g.font = font
-                g.drawString(text, x, y - scroll)
-            }
     }
 
     private fun drawScrollbar(g: Graphics) {

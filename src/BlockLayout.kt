@@ -1,3 +1,4 @@
+import java.awt.Color
 import java.awt.Font
 import java.awt.font.FontRenderContext
 
@@ -165,7 +166,17 @@ open class BlockLayout(
         }
     }
 
-    open fun paint(): List<DisplayElement> = displayList
+    open fun paint(): List<DrawCommand> =
+        buildList {
+            if (node is Element && node.tag == "pre") {
+                val x2 = x + width
+                val y2 = y + height
+                add(DrawRect(y, x, y2, x2, Color.LIGHT_GRAY))
+            }
+            if (layoutMode() == LayoutMode.INLINE) {
+                addAll(displayList.map { DrawText(it.y, it.x, it.text, it.font) })
+            }
+        }
 
     companion object {
         protected const val HSTEP = 13
@@ -229,7 +240,7 @@ class DocumentLayout(
         height = children.sumOf { it.height }
     }
 
-    override fun paint(): List<DisplayElement> = listOf()
+    override fun paint(): List<DrawCommand> = listOf()
 }
 
 enum class LayoutMode {
@@ -239,7 +250,7 @@ enum class LayoutMode {
 
 fun paintTree(
     layoutObject: BlockLayout,
-    displayList: MutableList<DisplayElement>,
+    displayList: MutableList<DrawCommand>,
 ) {
     displayList.addAll(layoutObject.paint())
     layoutObject.children.forEach { paintTree(it, displayList) }
