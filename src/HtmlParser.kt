@@ -15,7 +15,7 @@ data class Element(
     override val children: MutableList<Node> = mutableListOf(),
 ) : Node()
 
-class HtmlParser(
+open class HtmlParser(
     private val html: String,
 ) {
     private val unfinished = mutableListOf<Node>()
@@ -37,7 +37,7 @@ class HtmlParser(
             "wbr",
         )
 
-    fun parse(): Node {
+    open fun parse(): Node {
         var text = ""
         var entity = ""
         var inTag = false
@@ -131,7 +131,7 @@ class HtmlParser(
         return unfinished.removeLast()
     }
 
-    private fun getEntity(name: String): String =
+    protected fun getEntity(name: String): String =
         when (name) {
             "lt" -> "<"
             "gt" -> ">"
@@ -139,4 +139,60 @@ class HtmlParser(
             "quot" -> "\""
             else -> name
         }
+}
+
+class ViewSourceHtmlParser(
+    private val html: String,
+) : HtmlParser(html) {
+    private val root = Element("html")
+
+    override fun parse(): Node {
+        var text = ""
+        var entity = ""
+        var inTag = false
+        var inEntity = false
+
+        for (char in html) {
+            if (char == '<') {
+                inTag = true
+                if (text.isNotEmpty()) {
+                    addText(text)
+                }
+                text = ""
+            } else if (char == '>') {
+                inTag = false
+                addTag(text)
+                text = ""
+            } else if (!inTag && char == '&') {
+                inEntity = true
+            } else if (inEntity) {
+                if (char == ';') {
+                    text += getEntity(entity)
+                    inEntity = false
+                    entity = ""
+                } else {
+                    entity += char
+                }
+            } else {
+                text += char
+            }
+        }
+        if (!inTag && text.isNotEmpty()) {
+            addText(text)
+        }
+
+        return root
+    }
+
+    private fun addText(text: String) {
+        if (text.isBlank()) {
+            return
+        }
+        val element = Element("b", root, mapOf(), mutableListOf(Text(text)))
+        root.children.add(element)
+    }
+
+    private fun addTag(tag: String) {
+        root.children.add(Text("<$tag>", root))
+    }
 }

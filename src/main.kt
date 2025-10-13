@@ -81,7 +81,7 @@ class BrowserCanvas : Canvas() {
 
     private fun drawContent(g: Graphics) {
         displayList
-            .filter { y <= scroll + height && y + 18 >= scroll }
+            .filter { it.y <= scroll + height && it.y + 18 >= scroll }
             .forEach { (x, y, text, font) ->
                 g.font = font
                 g.drawString(text, x, y - scroll)
@@ -100,8 +100,13 @@ class BrowserCanvas : Canvas() {
     }
 
     fun load(url: String) {
-        val response = HttpClient(url).get()
-        root = HtmlParser(response.body).parse()
+        var _url = url
+        if (url.startsWith("view-source:")) {
+            _url = url.removePrefix("view-source:")
+        }
+        val response = HttpClient(_url).get()
+        val parser = if (url.startsWith("view-source")) ViewSourceHtmlParser(response.body) else HtmlParser(response.body)
+        root = parser.parse()
         val layout = Layout(root!!, width)
         displayList = layout.displayList
         contentHeight = layout.contentHeight
