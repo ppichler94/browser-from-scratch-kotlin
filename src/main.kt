@@ -62,7 +62,13 @@ class BrowserCanvas : Canvas() {
         )
 
         addMouseWheelListener {
-            scroll += it.wheelRotation * 10
+            scroll += it.wheelRotation * 30
+            if (scroll < 0) {
+                scroll = 0
+            }
+            if (scroll > contentHeight - height) {
+                scroll = contentHeight - height
+            }
             repaint()
         }
     }
@@ -74,16 +80,12 @@ class BrowserCanvas : Canvas() {
     }
 
     private fun drawContent(g: Graphics) {
-        displayList.forEach { (x, y, text, font) ->
-            if (y > scroll + height) {
-                return
+        displayList
+            .filter { y <= scroll + height && y + 18 >= scroll }
+            .forEach { (x, y, text, font) ->
+                g.font = font
+                g.drawString(text, x, y - scroll)
             }
-            if (y + 18 < scroll) {
-                return
-            }
-            g.font = font
-            g.drawString(text, x, y)
-        }
     }
 
     private fun drawScrollbar(g: Graphics) {

@@ -1,4 +1,8 @@
-import java.net.Socket
+import java.nio.file.Files
+import java.nio.file.Path
+import javax.net.SocketFactory
+import javax.net.ssl.SSLSocketFactory
+import kotlin.io.encoding.Base64
 
 data class Response(
     val status: Int,
@@ -16,6 +20,8 @@ data class Response(
             val headers = headerLines.drop(1).associate { line -> line.split(": ").let { it[0] to it[1] } }
             return Response(status, reason, headers, body)
         }
+
+        fun ok(body: String) = Response(200, "OK", mapOf(), body)
     }
 }
 
@@ -29,12 +35,19 @@ class HttpClient(
         when (url.scheme) {
             "http" -> return getHttp()
             "https" -> return getHttp()
+            "file" -> return getFile()
+            "data" -> return getData()
             else -> throw Exception("Unknown scheme: ${url.scheme}")
         }
     }
 
     private fun getHttp(): Response {
-        val socket = Socket(url.host, url.port)
+        val socket =
+            when (url.scheme) {
+                "http" -> SocketFactory.getDefault().createSocket(url.host, 80)
+                "https" -> SSLSocketFactory.getDefault().createSocket(url.host, 443)
+                else -> throw Exception("Unknown scheme: ${url.scheme}")
+            }
         var request = "GET ${url.path} HTTP/1.1\r\n"
         request += "Host: ${url.host}\r\n"
         request += "Connection: close\r\n"
@@ -47,5 +60,30 @@ class HttpClient(
         val response = socket.getInputStream().bufferedReader().readText()
         socket.close()
         return Response.fromText(response)
+    }
+
+    private fun getFile(): Response {
+        try {
+            val path = Path.of(url.path)
+            return Response.ok(Files.readString(path))
+        } catch (e: Exception) {
+            return Response(404, "Not Found", mapOf(), "File not found.")
+        }
+    }
+
+    private fun getData(): Response {
+        val dataContent = url.dataContent
+        if (',' !in dataContent) {
+            return Response(400, "Bad Request", mapOf(), "Missing comma in data URL.")
+        }
+
+        val (header, data) = dataContent.split(",", limit = 2)
+        val body =
+            if (header.endsWith(";base64")) {
+                Base64.decode(data).decodeToString()
+            } else {
+                data
+            }
+        return Response.ok(body)
     }
 }
