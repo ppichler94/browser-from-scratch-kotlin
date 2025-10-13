@@ -6,14 +6,18 @@ data class Text(
     val content: String,
     val parent: Node? = null,
     override val children: MutableList<Node> = mutableListOf(),
-) : Node()
+) : Node() {
+    override fun toString() = content
+}
 
 data class Element(
     val tag: String,
     val parent: Node? = null,
     val attributes: Map<String, String> = mapOf(),
     override val children: MutableList<Node> = mutableListOf(),
-) : Node()
+) : Node() {
+    override fun toString() = "<$tag $attributes>"
+}
 
 open class HtmlParser(
     private val html: String,

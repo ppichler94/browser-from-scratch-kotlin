@@ -41,10 +41,11 @@ fun main() {
 }
 
 class BrowserCanvas : Canvas() {
-    private var displayList: List<DisplayElement> = mutableListOf()
+    private var displayList: MutableList<DisplayElement> = mutableListOf()
     private var contentHeight = 0
     private var scroll = 0
     private var root: Node? = null
+    private lateinit var document: BlockLayout
 
     init {
         addComponentListener(
@@ -53,9 +54,9 @@ class BrowserCanvas : Canvas() {
                     if (root == null) {
                         return
                     }
-                    val layout = Layout(root!!, width)
-                    displayList = layout.displayList
-                    contentHeight = layout.contentHeight
+                    document.layout(width)
+                    paintTree(document, displayList)
+                    contentHeight = document.height
                     repaint()
                 }
             },
@@ -107,9 +108,10 @@ class BrowserCanvas : Canvas() {
         val response = HttpClient(_url).get()
         val parser = if (url.startsWith("view-source")) ViewSourceHtmlParser(response.body) else HtmlParser(response.body)
         root = parser.parse()
-        val layout = Layout(root!!, width)
-        displayList = layout.displayList
-        contentHeight = layout.contentHeight
+        document = DocumentLayout(root!!)
+        document.layout(width)
+        paintTree(document, displayList)
+        contentHeight = document.height
         repaint()
     }
 }
