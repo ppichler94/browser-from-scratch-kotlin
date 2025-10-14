@@ -5,6 +5,7 @@ import org.mockserver.integration.ClientAndServer
 import org.mockserver.junit.jupiter.MockServerExtension
 import org.mockserver.junit.jupiter.MockServerSettings
 import org.mockserver.model.HttpRequest.request
+import org.mockserver.model.HttpResponse
 import org.mockserver.model.HttpResponse.response
 import kotlin.test.Test
 
@@ -83,17 +84,69 @@ class HttpClientTest(
         assertThat(response.body).isEqualTo("Missing location header.")
     }
 
+    @Test
+    fun `caches responses`() {
+        val client = HttpClient()
+        mockGet("/test", "Hello, MockServer!") {
+            withHeader("Cache-Control", "max-age=31536000")
+        }
+        val response = client.get("http://localhost/test")
+        mockServer.reset()
+
+        mockGet("/test", "Not hello, MockServer!")
+        val cachedResponse = client.get("http://localhost/test")
+
+        assertThat(response.body).isEqualTo("Hello, MockServer!")
+        assertThat(cachedResponse.body).isEqualTo("Hello, MockServer!")
+    }
+
+    @Test
+    fun `does not cache different requests`() {
+        val client = HttpClient()
+        mockGet("/test", "Hello, MockServer!") {
+            withHeader("Cache-Control", "max-age=31536000")
+        }
+        mockGet("/test2", "Hello, MockServer!") {
+            withHeader("Cache-Control", "max-age=31536000")
+        }
+        val response1 = client.get("http://localhost/test")
+        val response2 = client.get("http://localhost/test2")
+
+        assertThat(response1.body).isEqualTo("Hello, MockServer!")
+        assertThat(response2.body).isEqualTo("Hello, MockServer!")
+    }
+
+    @Test
+    fun `does not cache if no-cache is set`() {
+        val client = HttpClient()
+        mockGet("/test", "Hello, MockServer!") {
+            withHeader("Cache-Control", "max-age=31536000,no-cache")
+        }
+        val response1 = client.get("http://localhost/test")
+        mockServer.reset()
+        mockGet("/test", "Hello again, MockServer!") {
+            withHeader("Cache-Control", "max-age=31536000,no-cache")
+        }
+        val response2 = client.get("http://localhost/test")
+
+        assertThat(response1.body).isEqualTo("Hello, MockServer!")
+        assertThat(response2.body).isEqualTo("Hello again, MockServer!")
+    }
+
     private fun mockGet(
         path: String,
         response: String,
+        customizer: HttpResponse.() -> Unit = {},
     ) {
+        val serverResponse = response()
+        serverResponse.customizer()
         mockServer
             .`when`(
                 request()
                     .withMethod("GET")
                     .withPath(path),
             ).respond {
-                response()
+                serverResponse
                     .withStatusCode(200)
                     .withBody(response)
             }

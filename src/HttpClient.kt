@@ -2,6 +2,7 @@ import java.io.BufferedReader
 import java.net.Socket
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 import javax.net.SocketFactory
 import javax.net.ssl.SSLSocketFactory
 import kotlin.io.encoding.Base64
@@ -30,6 +31,7 @@ data class Response(
 class HttpClient {
     private var socket: Socket? = null
     private var origin: String? = null
+    private val cache = mutableMapOf<Url, Pair<Instant, Response>>()
 
     fun get(
         url: String,
@@ -46,11 +48,11 @@ class HttpClient {
             return Response.badRequest("Too many redirects.")
         }
 
-        when (url.scheme) {
-            "http" -> return getHttp(url, headers, redirectCount)
-            "https" -> return getHttp(url, headers, redirectCount)
-            "file" -> return getFile(url)
-            "data" -> return getData(url)
+        return when (url.scheme) {
+            "http" -> getHttp(url, headers, redirectCount)
+            "https" -> getHttp(url, headers, redirectCount)
+            "file" -> getFile(url)
+            "data" -> getData(url)
             else -> throw Exception("Unknown scheme: ${url.scheme}")
         }
     }
@@ -60,6 +62,10 @@ class HttpClient {
         headers: Map<String, String>,
         redirectCount: Int,
     ): Response {
+        if (url in cache && Instant.now().isBefore(cache[url]!!.first)) {
+            return cache[url]!!.second
+        }
+
         if (socket == null || socket?.isClosed == true || origin != url.origin) {
             socket =
                 when (url.scheme) {
@@ -91,6 +97,7 @@ class HttpClient {
                 }
             return get(nextUrl, headers, redirectCount + 1)
         }
+        cacheResponse(url, response)
         return response
     }
 
@@ -113,6 +120,32 @@ class HttpClient {
         reader.read(buffer, 0, length.toInt())
         val body = buffer.concatToString()
         return Response(status, reason, headers, body)
+    }
+
+    private fun cacheResponse(
+        url: Url,
+        response: Response,
+    ) {
+        if (response.status != 200) {
+            return
+        }
+        val cacheControl =
+            response.headers["cache-control"]
+                ?.split(",")
+                ?.map { it.trim().lowercase() }
+                ?: listOf()
+        if ("no-cache" in cacheControl) {
+            return
+        }
+        val maxAge =
+            cacheControl
+                .find { it.startsWith("max-age=") }
+                ?.split("=")
+                ?.get(1)
+                ?.toLong() ?: 0
+        if (maxAge > 0) {
+            cache[url] = Instant.now().plusSeconds(maxAge) to response
+        }
     }
 
     private fun getFile(url: Url): Response {
