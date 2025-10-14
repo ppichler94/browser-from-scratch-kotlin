@@ -46,6 +46,7 @@ class BrowserCanvas : Canvas() {
     private var scroll = 0
     private var root: Node? = null
     private lateinit var document: BlockLayout
+    private val httpClient = HttpClient()
 
     init {
         addComponentListener(
@@ -92,11 +93,11 @@ class BrowserCanvas : Canvas() {
     }
 
     fun load(url: String) {
-        var _url = url
+        var requestUrl = url
         if (url.startsWith("view-source:")) {
-            _url = url.removePrefix("view-source:")
+            requestUrl = url.removePrefix("view-source:")
         }
-        val response = HttpClient(_url).get()
+        val response = httpClient.get(requestUrl)
         val parser = if (url.startsWith("view-source")) ViewSourceHtmlParser(response.body) else HtmlParser(response.body)
         root = parser.parse()
         document = DocumentLayout(root!!)

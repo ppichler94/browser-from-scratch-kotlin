@@ -1,3 +1,5 @@
+import java.io.BufferedReader
+import java.net.Socket
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.net.SocketFactory
@@ -10,71 +12,122 @@ data class Response(
     val headers: Map<String, String>,
     val body: String,
 ) {
-    companion object {
-        fun fromText(text: String): Response {
-            val (header, body) = text.split("\r\n\r\n", limit = 2)
-            val headerLines = header.split("\r\n")
-            val statusLine = headerLines[0].split(" ")
-            val status = statusLine[1].toInt()
-            val reason = statusLine[2]
-            val headers = headerLines.drop(1).associate { line -> line.split(": ").let { it[0] to it[1] } }
-            return Response(status, reason, headers, body)
-        }
+    override fun toString(): String {
+        val headers = headers.entries.joinToString("\n") { (key, value) -> "$key: $value" }
+        return "HTTP/1.1 $status $reason\n$headers\n\nBody length: ${body.length}"
+    }
 
-        fun ok(body: String) = Response(200, "OK", mapOf(), body)
+    companion object {
+        fun ok(
+            body: String,
+            headers: Map<String, String> = mapOf(),
+        ) = Response(200, "OK", headers, body)
+
+        fun badRequest(body: String) = Response(400, "Bad Request", mapOf(), body)
     }
 }
 
-class HttpClient(
-    url: String,
-    private val headers: Map<String, String> = mapOf(),
-) {
-    private val url = Url(url)
+class HttpClient {
+    private var socket: Socket? = null
+    private var origin: String? = null
 
-    fun get(): Response {
+    fun get(
+        url: String,
+        headers: Map<String, String> = mapOf(),
+        redirectCount: Int = 0,
+    ) = get(Url(url), headers, redirectCount)
+
+    fun get(
+        url: Url,
+        headers: Map<String, String> = mapOf(),
+        redirectCount: Int = 0,
+    ): Response {
+        if (redirectCount > 10) {
+            return Response.badRequest("Too many redirects.")
+        }
+
         when (url.scheme) {
-            "http" -> return getHttp()
-            "https" -> return getHttp()
-            "file" -> return getFile()
-            "data" -> return getData()
+            "http" -> return getHttp(url, headers, redirectCount)
+            "https" -> return getHttp(url, headers, redirectCount)
+            "file" -> return getFile(url)
+            "data" -> return getData(url)
             else -> throw Exception("Unknown scheme: ${url.scheme}")
         }
     }
 
-    private fun getHttp(): Response {
-        val socket =
-            when (url.scheme) {
-                "http" -> SocketFactory.getDefault().createSocket(url.host, 80)
-                "https" -> SSLSocketFactory.getDefault().createSocket(url.host, 443)
-                else -> throw Exception("Unknown scheme: ${url.scheme}")
-            }
+    private fun getHttp(
+        url: Url,
+        headers: Map<String, String>,
+        redirectCount: Int,
+    ): Response {
+        if (socket == null || socket?.isClosed == true || origin != url.origin) {
+            socket =
+                when (url.scheme) {
+                    "http" -> SocketFactory.getDefault().createSocket(url.host, 80)
+                    "https" -> SSLSocketFactory.getDefault().createSocket(url.host, 443)
+                    else -> throw Exception("Unknown scheme: ${url.scheme}")
+                }
+            origin = url.origin
+        }
+
         var request = "GET ${url.path} HTTP/1.1\r\n"
         request += "Host: ${url.host}\r\n"
-        request += "Connection: close\r\n"
+        request += "Connection: keep-alive\r\n"
         request += "User-Agent: MyBrowser/0.0\r\n"
         headers.forEach { (key, value) ->
             request += "$key: $value\r\n"
         }
         request += "\r\n"
-        socket.getOutputStream().write(request.toByteArray())
-        val response = socket.getInputStream().bufferedReader().readText()
-        socket.close()
-        return Response.fromText(response)
+
+        socket!!.getOutputStream().write(request.toByteArray())
+        val response = parseResponse(socket!!.getInputStream().bufferedReader())
+        if (response.status in 300..<400) {
+            val location = response.headers["location"] ?: return Response.badRequest("Missing location header.")
+            val nextUrl =
+                if (location.startsWith("/")) {
+                    url.copy(path = location)
+                } else {
+                    Url(location)
+                }
+            return get(nextUrl, headers, redirectCount + 1)
+        }
+        return response
     }
 
-    private fun getFile(): Response {
+    private fun parseResponse(reader: BufferedReader): Response {
+        val headerLines = mutableListOf<String>()
+        val statusLine = reader.readLine().split(" ")
+        val status = statusLine[1].toInt()
+        val reason = statusLine[2]
+
+        while (true) {
+            val line = reader.readLine()
+            if (line.isBlank()) {
+                break
+            }
+            headerLines.add(line)
+        }
+        val headers = headerLines.associate { it.split(": ").let { (key, value) -> key.lowercase() to value.trim() } }
+        val length = headers["content-length"] ?: "0"
+        val buffer = CharArray(length.toInt())
+        reader.read(buffer, 0, length.toInt())
+        val body = buffer.concatToString()
+        return Response(status, reason, headers, body)
+    }
+
+    private fun getFile(url: Url): Response {
         try {
             val path = Path.of(url.path)
             return Response.ok(Files.readString(path))
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             return Response(404, "Not Found", mapOf(), "File not found.")
         }
     }
 
-    private fun getData(): Response {
+    private fun getData(url: Url): Response {
         val dataContent = url.dataContent
         if (',' !in dataContent) {
-            return Response(400, "Bad Request", mapOf(), "Missing comma in data URL.")
+            return Response.badRequest("Missing comma in data URL.")
         }
 
         val (header, data) = dataContent.split(",", limit = 2)

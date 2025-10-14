@@ -4,7 +4,9 @@ data class Url(
     val port: Int,
     val path: String,
     val dataContent: String,
-)
+) {
+    val origin get() = "$scheme://$host:$port"
+}
 
 fun Url(url: String): Url {
     val (scheme, _) = url.split(":")

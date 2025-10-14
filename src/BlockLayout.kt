@@ -27,6 +27,8 @@ open class BlockLayout(
     var size = 12
     var bold = false
     var italic = false
+    var fontFamily = "Times"
+    var preformatted = false
     val line = mutableListOf<LineElement>()
     val contentHeight get() = cursorY
     protected var x: Int = 0
@@ -109,8 +111,14 @@ open class BlockLayout(
         if (italic) {
             style += Font.ITALIC
         }
-        val font = Font("Times", style, size)
-        content.split("\\s+".toRegex()).forEach { word(it, font) }
+        if (preformatted) {
+            flush()
+            val font = Font(Font.MONOSPACED, style, size)
+            preformatted(content, font)
+        } else {
+            val font = Font("Times", style, size)
+            content.split("\\s+".toRegex()).forEach { word(it, font) }
+        }
     }
 
     fun word(
@@ -143,6 +151,18 @@ open class BlockLayout(
         line.clear()
     }
 
+    fun preformatted(
+        text: String,
+        font: Font,
+    ) {
+        cursorX = 0
+        text.split("\n").forEach {
+            displayList.add(DisplayElement(cursorX + x, cursorY + y, it, font))
+            cursorX = 0
+            cursorY += font.getLineMetrics(it, FontRenderContext(null, true, true)).height.toInt()
+        }
+    }
+
     fun openTag(node: Element) {
         when (node.tag) {
             "i" -> italic = true
@@ -150,6 +170,7 @@ open class BlockLayout(
             "small" -> size -= 2
             "big" -> size += 4
             "br" -> flush()
+            "pre" -> preformatted = true
         }
     }
 
@@ -163,6 +184,7 @@ open class BlockLayout(
                 flush()
                 cursorY += VSTEP
             }
+            "pre" -> preformatted = false
         }
     }
 

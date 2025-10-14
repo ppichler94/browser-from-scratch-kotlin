@@ -1,1 +1,7 @@
 product: jvm/app
+
+test-dependencies:
+  - org.mock-server:mockserver-netty-no-dependencies:5.15.0
+  - org.mock-server:mockserver-client-java-no-dependencies:5.15.0
+  - org.mock-server:mockserver-junit-jupiter-no-dependencies:5.15.0
+  - org.assertj:assertj-core:3.27.3
