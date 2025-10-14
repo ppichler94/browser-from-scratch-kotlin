@@ -27,7 +27,6 @@ open class BlockLayout(
     var size = 12
     var bold = false
     var italic = false
-    var fontFamily = "Times"
     var preformatted = false
     val line = mutableListOf<LineElement>()
     val contentHeight get() = cursorY
@@ -38,6 +37,9 @@ open class BlockLayout(
         protected set
 
     open fun layout(frameWidth: Int) {
+        if (node is Element && node.tag == "head") {
+            return
+        }
         x = parent?.x ?: 0
         width = parent?.width ?: (frameWidth - x)
         y =
@@ -94,9 +96,6 @@ open class BlockLayout(
         if (node is Text) {
             text(node.content)
         } else if (node is Element) {
-            if (node.tag == "script" || node.tag == "style") {
-                return
-            }
             openTag(node)
             node.children.forEach { recurse(it) }
             closeTag(node)
@@ -195,8 +194,12 @@ open class BlockLayout(
                 val y2 = y + height
                 add(DrawRect(y, x, y2, x2, Color.LIGHT_GRAY))
             }
+            if (node is Element && node.tag == "li") {
+                add(DrawRect(y + 6, x + 2, y + 14, x + 8, Color.LIGHT_GRAY))
+            }
             if (layoutMode() == LayoutMode.INLINE) {
-                addAll(displayList.map { DrawText(it.y, it.x, it.text, it.font) })
+                val offset = if (node is Element && node.tag == "li") 10 else 0
+                addAll(displayList.map { DrawText(it.y, it.x + offset, it.text, it.font) })
             }
         }
 
