@@ -17,6 +17,17 @@ data class Element(
     override val children: MutableList<Node> = mutableListOf(),
 ) : Node() {
     override fun toString() = "<$tag $attributes>"
+
+    val style: Map<String, String>
+
+    init {
+        if ("style" in attributes) {
+            val pairs = CssParser(attributes["style"]!!).body()
+            style = pairs.toMap()
+        } else {
+            style = mapOf()
+        }
+    }
 }
 
 open class HtmlParser(
@@ -92,7 +103,7 @@ open class HtmlParser(
         if (tag.startsWith("!")) {
             return
         }
-        val (tag, attrs) = getAttributes(tag)
+        val (tag, attrs) = HtmlTagParser(tag).tag()
         if (tag.startsWith("/")) {
             if (unfinished.size == 1) {
                 return
@@ -109,21 +120,6 @@ open class HtmlParser(
             val node = Element(tag, parent, attrs)
             unfinished.add(node)
         }
-    }
-
-    private fun getAttributes(tag: String): Pair<String, Map<String, String>> {
-        val parts = tag.split("\\s+".toRegex())
-        val tag = parts[0].lowercase()
-        val attrs = mutableMapOf<String, String>()
-        parts.drop(1).forEach { part ->
-            if ("=" in part) {
-                val (key, value) = part.split("=", limit = 2)
-                attrs[key] = value
-            } else {
-                attrs[part] = ""
-            }
-        }
-        return Pair(tag, attrs)
     }
 
     protected open fun finish(): Node {
@@ -146,7 +142,7 @@ open class HtmlParser(
 }
 
 class ViewSourceHtmlParser(
-    private val html: String,
+    html: String,
 ) : HtmlParser(html) {
     private val root = Element("html")
 

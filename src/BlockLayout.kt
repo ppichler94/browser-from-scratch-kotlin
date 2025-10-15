@@ -189,10 +189,12 @@ open class BlockLayout(
 
     open fun paint(): List<DrawCommand> =
         buildList {
-            if (node is Element && node.tag == "pre") {
+            val bgcolor = if (node is Element) node.style["background-color"] ?: "transparent" else "transparent"
+            if (bgcolor != "transparent") {
                 val x2 = x + width
                 val y2 = y + height
-                add(DrawRect(y, x, y2, x2, Color.LIGHT_GRAY))
+                val bgColorCode = if (bgcolor.startsWith("#")) bgcolor else colorCode(bgcolor)
+                add(DrawRect(y, x, y2, x2, Color.decode(bgColorCode)))
             }
             if (node is Element && node.tag == "li") {
                 add(DrawRect(y + 6, x + 2, y + 14, x + 8, Color.LIGHT_GRAY))

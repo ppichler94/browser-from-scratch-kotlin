@@ -116,6 +116,8 @@ class HttpClient {
         }
         val headers = headerLines.associate { it.split(": ").let { (key, value) -> key.lowercase() to value.trim() } }
         val length = headers["content-length"] ?: "0"
+        require("transfer-encoding" !in headers) { "Transfer-encoding is not supported." }
+        require("content-encoding" !in headers) { "Content encoding is not supported." }
         val buffer = CharArray(length.toInt())
         reader.read(buffer, 0, length.toInt())
         val body = buffer.concatToString()
