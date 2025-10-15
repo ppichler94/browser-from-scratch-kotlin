@@ -6,6 +6,8 @@ data class Url(
     val dataContent: String,
 ) {
     val origin get() = "$scheme://$host:$port"
+
+    override fun toString() = "$scheme://$host:$port$path"
 }
 
 fun Url(url: String): Url {

@@ -1,4 +1,4 @@
-import java.io.BufferedReader
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.net.Socket
 import java.nio.file.Files
 import java.nio.file.Path
@@ -32,6 +32,7 @@ class HttpClient {
     private var socket: Socket? = null
     private var origin: String? = null
     private val cache = mutableMapOf<Url, Pair<Instant, Response>>()
+    private val logger = KotlinLogging.logger {}
 
     fun get(
         url: String,
@@ -47,6 +48,7 @@ class HttpClient {
         if (redirectCount > 10) {
             return Response.badRequest("Too many redirects.")
         }
+        logger.info { "GET $url" }
 
         return when (url.scheme) {
             "http" -> getHttp(url, headers, redirectCount)
@@ -66,7 +68,11 @@ class HttpClient {
             return cache[url]!!.second
         }
 
-        if (socket == null || socket?.isClosed == true || origin != url.origin) {
+        if (origin != null && url.origin != origin) {
+            socket?.close()
+        }
+
+        if (socket == null || socket?.isConnected != true) {
             socket =
                 when (url.scheme) {
                     "http" -> SocketFactory.getDefault().createSocket(url.host, url.port)
@@ -85,8 +91,9 @@ class HttpClient {
         }
         request += "\r\n"
 
+        logger.info { "Send request to ${url.origin}" }
         socket!!.getOutputStream().write(request.toByteArray())
-        val response = parseResponse(socket!!.getInputStream().bufferedReader())
+        val response = parseResponse(socket!!.getInputStream())
         if (response.status in 300..<400) {
             val location = response.headers["location"] ?: return Response.badRequest("Missing location header.")
             val nextUrl =
@@ -98,30 +105,47 @@ class HttpClient {
             return get(nextUrl, headers, redirectCount + 1)
         }
         cacheResponse(url, response)
+        logger.info { "Received response: $response" }
         return response
     }
 
-    private fun parseResponse(reader: BufferedReader): Response {
-        val headerLines = mutableListOf<String>()
-        val statusLine = reader.readLine().split(" ")
-        val status = statusLine[1].toInt()
-        val reason = statusLine[2]
+    private fun parseResponse(inputStream: java.io.InputStream): Response {
+        val statusLine = readLine(inputStream)
+        val (_, status, reason) = statusLine.split(" ", limit = 3)
 
+        val headerLines = mutableListOf<String>()
         while (true) {
-            val line = reader.readLine()
+            val line = readLine(inputStream)
             if (line.isBlank()) {
                 break
             }
             headerLines.add(line)
         }
         val headers = headerLines.associate { it.split(": ").let { (key, value) -> key.lowercase() to value.trim() } }
-        val length = headers["content-length"] ?: "0"
+        val length = headers["content-length"]?.toInt() ?: 0
+        logger.info { "Read response body with length $length" }
         require("transfer-encoding" !in headers) { "Transfer-encoding is not supported." }
         require("content-encoding" !in headers) { "Content encoding is not supported." }
-        val buffer = CharArray(length.toInt())
-        reader.read(buffer, 0, length.toInt())
-        val body = buffer.concatToString()
-        return Response(status, reason, headers, body)
+
+        val bodyData = inputStream.readNBytes(length)
+        require(bodyData.size == length) { "Unexpected end of body." }
+        val body = bodyData.decodeToString()
+        return Response(status.toInt(), reason, headers, body)
+    }
+
+    private fun readLine(inputStream: java.io.InputStream): String {
+        var line = ""
+        while (true) {
+            val char = inputStream.read()
+            if (char == '\n'.code) {
+                break
+            }
+            if (char == '\r'.code) {
+                continue
+            }
+            line += char.toChar()
+        }
+        return line
     }
 
     private fun cacheResponse(

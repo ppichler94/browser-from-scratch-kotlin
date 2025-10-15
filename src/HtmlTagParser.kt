@@ -1,6 +1,10 @@
+import io.github.oshai.kotlinlogging.KotlinLogging
+
 class HtmlTagParser(
     input: String,
 ) : BaseParser(input) {
+    private val logger = KotlinLogging.logger {}
+
     fun name(): String {
         val start = index
         while (index < input.length) {
@@ -62,7 +66,7 @@ class HtmlTagParser(
                     }
                     whitespace()
                 } catch (e: Exception) {
-                    println(e.message) // todo: use logger
+                    logger.warn { e.message }
                     if (ignoreUntil(" ") == ' ') {
                         whitespace()
                     } else {

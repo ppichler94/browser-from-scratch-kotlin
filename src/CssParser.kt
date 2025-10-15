@@ -1,3 +1,4 @@
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlin.math.max
 import kotlin.math.min
 
@@ -47,6 +48,8 @@ open class BaseParser(
 class CssParser(
     input: String,
 ) : BaseParser(input) {
+    private val logger = KotlinLogging.logger {}
+
     fun word(): String {
         val start = index
         while (index < input.length) {
@@ -81,7 +84,7 @@ class CssParser(
                     literal(';')
                     whitespace()
                 } catch (e: Exception) {
-                    println(e.message) // todo: use logger
+                    logger.warn { e.message }
                     if (ignoreUntil(";") == ';') {
                         literal(';')
                         whitespace()

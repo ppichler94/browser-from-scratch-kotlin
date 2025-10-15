@@ -1,5 +1,9 @@
 product: jvm/app
 
+dependencies:
+  - io.github.oshai:kotlin-logging-jvm:7.0.3
+  - ch.qos.logback:logback-classic:1.5.18
+
 test-dependencies:
   - org.mock-server:mockserver-netty-no-dependencies:5.15.0
   - org.mock-server:mockserver-client-java-no-dependencies:5.15.0

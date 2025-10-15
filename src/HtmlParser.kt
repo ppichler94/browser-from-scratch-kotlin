@@ -1,3 +1,5 @@
+import io.github.oshai.kotlinlogging.KotlinLogging
+
 sealed class Node {
     abstract val children: MutableList<Node>
 }
@@ -33,6 +35,7 @@ data class Element(
 open class HtmlParser(
     private val html: String,
 ) {
+    private val logger = KotlinLogging.logger {}
     private val unfinished = mutableListOf<Node>()
     private val selfClosingTags =
         setOf(
@@ -53,6 +56,7 @@ open class HtmlParser(
         )
 
     open fun parse(): Node {
+        logger.info { "Parsing HTML..." }
         var text = ""
         var entity = ""
         var inTag = false
