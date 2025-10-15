@@ -10,7 +10,7 @@ import org.mockserver.model.HttpResponse.response
 import kotlin.test.Test
 
 @ExtendWith(MockServerExtension::class)
-@MockServerSettings(ports = [80])
+@MockServerSettings(ports = [1080])
 class HttpClientTest(
     private val mockServer: ClientAndServer,
 ) {
@@ -23,7 +23,7 @@ class HttpClientTest(
     fun `test http get`() {
         mockGet("/test", "Hello, MockServer!")
 
-        val response = HttpClient().get("http://localhost/test")
+        val response = HttpClient().get("http://localhost:1080/test")
 
         assertThat(response.status).isEqualTo(200)
         assertThat(response.body).isEqualTo("Hello, MockServer!")
@@ -31,7 +31,7 @@ class HttpClientTest(
 
     @Test
     fun `returns 404 for unknown urls`() {
-        val response = HttpClient().get("http://localhost/unknown")
+        val response = HttpClient().get("http://localhost:1080/unknown")
 
         assertThat(response.status).isEqualTo(404)
     }
@@ -41,7 +41,7 @@ class HttpClientTest(
         mockRedirect("/redirect", "/redirected")
         mockGet("/redirected", "Redirected!")
 
-        val response = HttpClient().get("http://localhost/redirect")
+        val response = HttpClient().get("http://localhost:1080/redirect")
 
         assertThat(response.status).isEqualTo(200)
         assertThat(response.body).isEqualTo("Redirected!")
@@ -49,10 +49,10 @@ class HttpClientTest(
 
     @Test
     fun `follows absolute redirects`() {
-        mockRedirect("/redirect", "http://localhost/redirected")
+        mockRedirect("/redirect", "http://localhost:1080/redirected")
         mockGet("/redirected", "Redirected!")
 
-        val response = HttpClient().get("http://localhost/redirect")
+        val response = HttpClient().get("http://localhost:1080/redirect")
 
         assertThat(response.status).isEqualTo(200)
         assertThat(response.body).isEqualTo("Redirected!")
@@ -63,7 +63,7 @@ class HttpClientTest(
         mockRedirect("/redirect", "/redirected")
         mockRedirect("/redirected", "/redirect")
 
-        val response = HttpClient().get("http://localhost/redirect")
+        val response = HttpClient().get("http://localhost:1080/redirect")
 
         assertThat(response.status).isEqualTo(400)
         assertThat(response.body).isEqualTo("Too many redirects.")
@@ -78,7 +78,7 @@ class HttpClientTest(
                     .withPath("/redirect"),
             ).respond { response().withStatusCode(302) }
 
-        val response = HttpClient().get("http://localhost/redirect")
+        val response = HttpClient().get("http://localhost:1080/redirect")
 
         assertThat(response.status).isEqualTo(400)
         assertThat(response.body).isEqualTo("Missing location header.")
@@ -90,11 +90,11 @@ class HttpClientTest(
         mockGet("/test", "Hello, MockServer!") {
             withHeader("Cache-Control", "max-age=31536000")
         }
-        val response = client.get("http://localhost/test")
+        val response = client.get("http://localhost:1080/test")
         mockServer.reset()
 
         mockGet("/test", "Not hello, MockServer!")
-        val cachedResponse = client.get("http://localhost/test")
+        val cachedResponse = client.get("http://localhost:1080/test")
 
         assertThat(response.body).isEqualTo("Hello, MockServer!")
         assertThat(cachedResponse.body).isEqualTo("Hello, MockServer!")
@@ -109,8 +109,8 @@ class HttpClientTest(
         mockGet("/test2", "Hello, MockServer!") {
             withHeader("Cache-Control", "max-age=31536000")
         }
-        val response1 = client.get("http://localhost/test")
-        val response2 = client.get("http://localhost/test2")
+        val response1 = client.get("http://localhost:1080/test")
+        val response2 = client.get("http://localhost:1080/test2")
 
         assertThat(response1.body).isEqualTo("Hello, MockServer!")
         assertThat(response2.body).isEqualTo("Hello, MockServer!")
@@ -122,12 +122,12 @@ class HttpClientTest(
         mockGet("/test", "Hello, MockServer!") {
             withHeader("Cache-Control", "max-age=31536000,no-cache")
         }
-        val response1 = client.get("http://localhost/test")
+        val response1 = client.get("http://localhost:1080/test")
         mockServer.reset()
         mockGet("/test", "Hello again, MockServer!") {
             withHeader("Cache-Control", "max-age=31536000,no-cache")
         }
-        val response2 = client.get("http://localhost/test")
+        val response2 = client.get("http://localhost:1080/test")
 
         assertThat(response1.body).isEqualTo("Hello, MockServer!")
         assertThat(response2.body).isEqualTo("Hello again, MockServer!")

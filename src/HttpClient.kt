@@ -69,8 +69,8 @@ class HttpClient {
         if (socket == null || socket?.isClosed == true || origin != url.origin) {
             socket =
                 when (url.scheme) {
-                    "http" -> SocketFactory.getDefault().createSocket(url.host, 80)
-                    "https" -> SSLSocketFactory.getDefault().createSocket(url.host, 443)
+                    "http" -> SocketFactory.getDefault().createSocket(url.host, url.port)
+                    "https" -> SSLSocketFactory.getDefault().createSocket(url.host, url.port)
                     else -> throw Exception("Unknown scheme: ${url.scheme}")
                 }
             origin = url.origin

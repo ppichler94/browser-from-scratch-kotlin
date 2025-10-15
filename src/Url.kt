@@ -29,8 +29,9 @@ private fun parseHttpUrl(url: String): Url {
     var host = parts[0]
     rest = parts[1]
     if (":" in host) {
-        host = host.split(":")[0]
-        port = host.split(":")[1].toInt()
+        val (hostStr, portStr) = host.split(":", limit = 2)
+        host = hostStr
+        port = portStr.toInt()
     }
     val path = "/" + rest
 
