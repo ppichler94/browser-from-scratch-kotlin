@@ -83,10 +83,49 @@ class CssParser(
                     whitespace()
                     literal(';')
                     whitespace()
+                    if (input[index] == '}') {
+                        break
+                    }
                 } catch (e: Exception) {
                     logger.warn { e.message }
-                    if (ignoreUntil(";") == ';') {
+                    if (ignoreUntil(";}") == ';') {
                         literal(';')
+                        whitespace()
+                    } else {
+                        break
+                    }
+                }
+            }
+        }
+
+    fun selector(): Selector {
+        var out: Selector = TagSelector(word().lowercase())
+        whitespace()
+        while (index < input.length && input[index] != '{') {
+            val tag = word().lowercase()
+            val descendant = TagSelector(tag)
+            out = DescendantSelector(out, descendant)
+            whitespace()
+        }
+        return out
+    }
+
+    fun parse(): List<Pair<Selector, Map<String, String>>> =
+        buildList {
+            while (index < input.length) {
+                try {
+                    whitespace()
+                    val selector = selector()
+                    literal('{')
+                    whitespace()
+                    val body = body()
+                    whitespace()
+                    literal('}')
+                    add(Pair(selector, body))
+                } catch (e: Exception) {
+                    logger.warn { e.message }
+                    if (ignoreUntil("}") == '}') {
+                        literal('}')
                         whitespace()
                     } else {
                         break

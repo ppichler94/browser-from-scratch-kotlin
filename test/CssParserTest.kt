@@ -59,4 +59,32 @@ class CssParserTest {
         val body = parser.body()
         assertThat(body).isEqualTo(mapOf("width" to "100px", "height" to "100px"))
     }
+
+    @Test
+    fun `selector() parses a selector`() {
+        val parser = CssParser("div")
+        val selector = parser.selector()
+        assertThat(selector).isEqualTo(TagSelector("div"))
+    }
+
+    @Test
+    fun `selector() parses a descendant selector`() {
+        val parser = CssParser("div li")
+        val selector = parser.selector()
+        assertThat(selector).isEqualTo(DescendantSelector(TagSelector("div"), TagSelector("li")))
+    }
+
+    @Test
+    fun `parse() parses a CSS rule`() {
+        val parser = CssParser("div { width: 100px; color: red; }")
+        val rules = parser.parse()
+        assertThat(rules).isEqualTo(listOf(Pair(TagSelector("div"), mapOf("width" to "100px", "color" to "red"))))
+    }
+
+    @Test
+    fun `parse() ignores invalid rules`() {
+        val parser = CssParser("div! { width: 100px; } li { height: 100px; }")
+        val rules = parser.parse()
+        assertThat(rules).isEqualTo(listOf(Pair(TagSelector("li"), mapOf("height" to "100px"))))
+    }
 }

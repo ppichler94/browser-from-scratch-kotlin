@@ -1,26 +1,28 @@
 interface Selector {
-    fun matches(node: Element): Boolean = false
+    fun matches(node: Node): Boolean = false
 }
 
-class TagSelector(
+data class TagSelector(
     val tag: String,
 ) : Selector {
-    override fun matches(node: Element): Boolean = node.tag == tag
+    override fun matches(node: Node): Boolean = node is Element && node.tag == tag
 }
 
-class DescendantSelector(
+data class DescendantSelector(
     val ancestor: Selector,
     val descendant: Selector,
 ) : Selector {
-    override fun matches(node: Element): Boolean {
+    override fun matches(node: Node): Boolean {
         if (!descendant.matches(node)) {
             return false
         }
-        while (node.parent != null) {
-            if (ancestor.matches(node)) {
+        var current = node
+        while (current is Element && current.parent != null) {
+            if (ancestor.matches(current.parent)) {
                 return true
             }
-            node = node.parent!!
+            current = current.parent
         }
+        return false
     }
 }
