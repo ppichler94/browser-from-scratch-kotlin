@@ -70,9 +70,10 @@ class HttpClient {
 
         if (origin != null && url.origin != origin) {
             socket?.close()
+            socket = null
         }
 
-        if (socket == null || socket?.isConnected != true) {
+        if (socket == null || socket?.isConnected != true || socket?.isClosed != false) {
             socket =
                 when (url.scheme) {
                     "http" -> SocketFactory.getDefault().createSocket(url.host, url.port)

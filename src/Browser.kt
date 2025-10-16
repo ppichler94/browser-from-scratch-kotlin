@@ -6,34 +6,42 @@ import java.awt.event.ComponentEvent
 
 class Browser : Canvas() {
     private var displayList: MutableList<DrawCommand> = mutableListOf()
-    private var contentHeight = 0
     private var scroll = 0
     private var root: Node? = null
     private lateinit var document: BlockLayout
     private val httpClient = HttpClient()
+    private val defaultStyleSheet =
+        CssParser(
+            this::class.java
+                .getResourceAsStream("user-agent.css")
+                ?.reader()
+                ?.readText() ?: "",
+        ).parse()
 
     init {
         addComponentListener(
             object : ComponentAdapter() {
                 override fun componentResized(e: ComponentEvent) {
-                    if (root == null) {
+                    if (root == null || !::document.isInitialized) {
                         return
                     }
                     document.layout(width)
                     paintTree(document, displayList)
-                    contentHeight = document.height
                     repaint()
                 }
             },
         )
 
         addMouseWheelListener {
+            if (!::document.isInitialized) {
+                return@addMouseWheelListener
+            }
             scroll += it.wheelRotation * 30
             if (scroll < 0) {
                 scroll = 0
             }
-            if (scroll > contentHeight - height) {
-                scroll = contentHeight - height
+            if (scroll > document.height - height) {
+                scroll = document.height - height
             }
             repaint()
         }
@@ -46,12 +54,12 @@ class Browser : Canvas() {
     }
 
     private fun drawScrollbar(g: Graphics) {
-        if (contentHeight <= height) {
+        if (!::document.isInitialized || document.height <= height) {
             return
         }
-        val relativePageHeight = height.toDouble() / contentHeight.toDouble()
+        val relativePageHeight = height.toDouble() / document.height.toDouble()
         val scrollbarHeight = (height * relativePageHeight).toInt()
-        val scrollbarY = scroll / contentHeight.toDouble() * height
+        val scrollbarY = scroll / document.height.toDouble() * height
         g.color = Color.BLUE
         g.fillRect(width - 12, scrollbarY.toInt(), 8, scrollbarHeight)
     }
@@ -64,10 +72,10 @@ class Browser : Canvas() {
         val response = httpClient.get(requestUrl)
         val parser = if (url.startsWith("view-source")) ViewSourceHtmlParser(response.body) else HtmlParser(response.body)
         root = parser.parse()
+        HtmlParser.style(root!!, defaultStyleSheet)
         document = DocumentLayout(root!!)
         document.layout(width)
         paintTree(document, displayList)
-        contentHeight = document.height
         repaint()
     }
 }

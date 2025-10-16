@@ -22,6 +22,7 @@ open class BlockLayout(
     val children: MutableList<BlockLayout> = mutableListOf(),
 ) {
     private val displayList = mutableListOf<DisplayElement>()
+    val fontRenderContext = FontRenderContext(null, true, true)
     var cursorX = 0
     var cursorY = 0
     var size = 12
@@ -115,7 +116,7 @@ open class BlockLayout(
             val font = Font(Font.MONOSPACED, style, size)
             preformatted(content, font)
         } else {
-            val font = Font("Times", style, size)
+            val font = Font(Font.SANS_SERIF, style, size)
             content.split("\\s+".toRegex()).forEach { word(it, font) }
         }
     }
@@ -124,23 +125,23 @@ open class BlockLayout(
         word: String,
         font: Font,
     ) {
-        val width = font.getStringBounds(word, FontRenderContext(null, true, true)).width.toInt()
+        val width = font.getStringBounds(word, fontRenderContext).width.toInt()
         if (cursorX + width > this.width) {
             flush()
         }
         line.add(LineElement(cursorX, word, font))
-        cursorX += width + font.getStringBounds(" ", FontRenderContext(null, true, true)).width.toInt()
+        cursorX += width + font.getStringBounds(" ", fontRenderContext).width.toInt()
     }
 
     fun flush() {
         if (line.isEmpty()) {
             return
         }
-        val metrics = line.map { it.font.getLineMetrics(it.text, FontRenderContext(null, true, true)) }
+        val metrics = line.map { it.font.getLineMetrics(it.text, fontRenderContext) }
         val maxAscent = metrics.maxOfOrNull { it.ascent } ?: 0f
         val baseline = cursorY + (1.25f * maxAscent).toInt()
         line.forEach { (relX, text, font) ->
-            val ascent = font.getLineMetrics(text, FontRenderContext(null, true, true)).ascent
+            val ascent = font.getLineMetrics(text, fontRenderContext).ascent
             val y = this.y + baseline - ascent.toInt()
             displayList.add(DisplayElement(x + relX, y, text, font))
         }
@@ -158,7 +159,7 @@ open class BlockLayout(
         text.split("\n").forEach {
             displayList.add(DisplayElement(cursorX + x, cursorY + y, it, font))
             cursorX = 0
-            cursorY += font.getLineMetrics(it, FontRenderContext(null, true, true)).height.toInt()
+            cursorY += font.getLineMetrics(it, fontRenderContext).height.toInt()
         }
     }
 

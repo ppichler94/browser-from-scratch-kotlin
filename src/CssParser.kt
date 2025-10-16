@@ -49,6 +49,7 @@ class CssParser(
     input: String,
 ) : BaseParser(input) {
     private val logger = KotlinLogging.logger {}
+    typealias CssRule = Pair<Selector, Map<String, String>>
 
     fun word(): String {
         val start = index
@@ -110,7 +111,7 @@ class CssParser(
         return out
     }
 
-    fun parse(): List<Pair<Selector, Map<String, String>>> =
+    fun parse(): List<CssRule> =
         buildList {
             while (index < input.length) {
                 try {

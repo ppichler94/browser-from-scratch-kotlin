@@ -4,6 +4,8 @@ sealed class Node {
     abstract val children: MutableList<Node>
 }
 
+fun Node.treeToList(): List<Node> = children.flatMap { it.treeToList() } + listOf(this)
+
 data class Text(
     val content: String,
     val parent: Node? = null,
@@ -20,16 +22,7 @@ data class Element(
 ) : Node() {
     override fun toString() = "<$tag $attributes>"
 
-    val style: Map<String, String>
-
-    init {
-        if ("style" in attributes) {
-            val pairs = CssParser(attributes["style"]!!).body()
-            style = pairs.toMap()
-        } else {
-            style = mapOf()
-        }
-    }
+    val style = mutableMapOf<String, String>()
 }
 
 open class HtmlParser(
@@ -143,6 +136,29 @@ open class HtmlParser(
             "quot" -> "\""
             else -> name
         }
+
+    companion object {
+        fun style(
+            node: Node,
+            rules: List<CssParser.CssRule>,
+        ) {
+            if (node !is Element) {
+                return
+            }
+            rules
+                .filter { (selector, _) -> selector.matches(node) }
+                .forEach { (_, body) ->
+                    node.style.putAll(body)
+                }
+
+            if ("style" in node.attributes) {
+                val pairs = CssParser(node.attributes["style"]!!).body()
+                node.style.putAll(pairs)
+            }
+
+            node.children.forEach { style(it, rules) }
+        }
+    }
 }
 
 class ViewSourceHtmlParser(
