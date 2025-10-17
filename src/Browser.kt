@@ -78,21 +78,23 @@ class Browser : Canvas() {
         root = parser.parse()
         val rules = mutableListOf<CssParser.CssRule>()
         rules.addAll(defaultStyleSheet)
-        val links =
-            root!!
-                .treeToList()
-                .filterIsInstance<Element>()
-                .filter { it.tag == "link" && it.attributes["rel"] == "stylesheet" && "href" in it.attributes }
-                .map { it.attributes["href"]!! }
-                .map { requestUrl.resolve(it).toString() }
-                .mapNotNull {
-                    try {
-                        httpClient.get(it)
-                    } catch (e: Exception) {
-                        logger.warn { "Failed to load stylesheet: $it" }
-                        null
-                    }
-                }.forEach { rules.addAll(CssParser(it.body).parse()) }
+        root!!
+            .treeToList()
+            .filterIsInstance<Element>()
+            .filter { it.tag == "link" && it.attributes["rel"] == "stylesheet" && "href" in it.attributes }
+            .map { it.attributes["href"]!! }
+            .map { requestUrl.resolve(it).toString() }
+            .mapNotNull {
+                try {
+                    httpClient.get(it)
+                } catch (e: Exception) {
+                    logger.warn { "Failed to load stylesheet: $it" }
+                    null
+                }
+            }.forEach {
+                rules.addAll(CssParser(it.body).parse())
+            }
+        rules.sortBy { it.first.specificity }
         HtmlParser.style(root!!, rules)
         document = DocumentLayout(root!!)
         document.layout(width)

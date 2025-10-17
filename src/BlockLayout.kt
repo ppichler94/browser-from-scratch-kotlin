@@ -25,9 +25,6 @@ open class BlockLayout(
     val fontRenderContext = FontRenderContext(null, true, true)
     var cursorX = 0
     var cursorY = 0
-    var size = 12
-    var bold = false
-    var italic = false
     var preformatted = false
     val line = mutableListOf<LineElement>()
     val contentHeight get() = cursorY
@@ -63,8 +60,6 @@ open class BlockLayout(
             LayoutMode.INLINE -> {
                 cursorX = 0
                 cursorY = 0
-                bold = false
-                italic = false
                 line.clear()
                 recurse(node)
                 flush()
@@ -95,7 +90,7 @@ open class BlockLayout(
 
     fun recurse(node: Node) {
         if (node is Text) {
-            text(node.content)
+            text(node)
         } else if (node is Element) {
             openTag(node)
             node.children.forEach { recurse(it) }
@@ -103,21 +98,22 @@ open class BlockLayout(
         }
     }
 
-    fun text(content: String) {
+    fun text(node: Text) {
         var style = 0
-        if (bold) {
+        if (node.style["font-weight"] == "bold") {
             style += Font.BOLD
         }
-        if (italic) {
+        if (node.style["font-style"] == "italic") {
             style += Font.ITALIC
         }
+        val size = node.style["font-size"]?.toIntOrNull() ?: 12
         if (preformatted) {
             flush()
             val font = Font(Font.MONOSPACED, style, size)
-            preformatted(content, font)
+            preformatted(node.content, font)
         } else {
             val font = Font(Font.SANS_SERIF, style, size)
-            content.split("\\s+".toRegex()).forEach { word(it, font) }
+            node.content.split("\\s+".toRegex()).forEach { word(it, font) }
         }
     }
 
@@ -165,10 +161,6 @@ open class BlockLayout(
 
     fun openTag(node: Element) {
         when (node.tag) {
-            "i" -> italic = true
-            "b" -> bold = true
-            "small" -> size -= 2
-            "big" -> size += 4
             "br" -> flush()
             "pre" -> preformatted = true
         }
@@ -176,10 +168,6 @@ open class BlockLayout(
 
     fun closeTag(node: Element) {
         when (node.tag) {
-            "i" -> italic = false
-            "b" -> bold = false
-            "small" -> size += 2
-            "big" -> size -= 4
             "p" -> {
                 flush()
                 cursorY += VSTEP

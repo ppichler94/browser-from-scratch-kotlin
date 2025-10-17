@@ -2,13 +2,15 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 
 sealed class Node {
     abstract val children: MutableList<Node>
+    val style = mutableMapOf<String, String>()
+    abstract val parent: Node?
 }
 
 fun Node.treeToList(): List<Node> = children.flatMap { it.treeToList() } + listOf(this)
 
 data class Text(
     val content: String,
-    val parent: Node? = null,
+    override val parent: Node? = null,
     override val children: MutableList<Node> = mutableListOf(),
 ) : Node() {
     override fun toString() = content
@@ -16,13 +18,11 @@ data class Text(
 
 data class Element(
     val tag: String,
-    val parent: Node? = null,
+    override val parent: Node? = null,
     val attributes: Map<String, String> = mapOf(),
     override val children: MutableList<Node> = mutableListOf(),
 ) : Node() {
     override fun toString() = "<$tag $attributes>"
-
-    val style = mutableMapOf<String, String>()
 }
 
 open class HtmlParser(
@@ -138,12 +138,24 @@ open class HtmlParser(
         }
 
     companion object {
+        private val INHERITED_PROPERTIES =
+            mutableMapOf(
+                "font-size" to "16px",
+                "font-style" to "normal",
+                "font-weight" to "normal",
+                "color" to "black",
+            )
+
         fun style(
             node: Node,
             rules: List<CssParser.CssRule>,
         ) {
-            if (node !is Element) {
-                return
+            INHERITED_PROPERTIES.forEach { (property, value) ->
+                if (node.parent != null) {
+                    node.style[property] = node.parent!!.style[property] ?: value
+                } else {
+                    node.style[property] = value
+                }
             }
             rules
                 .filter { (selector, _) -> selector.matches(node) }
@@ -151,9 +163,21 @@ open class HtmlParser(
                     node.style.putAll(body)
                 }
 
-            if ("style" in node.attributes) {
+            if (node is Element && "style" in node.attributes) {
                 val pairs = CssParser(node.attributes["style"]!!).body()
                 node.style.putAll(pairs)
+            }
+
+            if (node.style["font-size"]?.endsWith("%") == true) {
+                val parentFontSize =
+                    if (node.parent is Element) {
+                        node.parent!!.style["font-size"]
+                    } else {
+                        INHERITED_PROPERTIES["font-size"]
+                    }
+                val nodePct = node.style["font-size"]!!.removeSuffix("%").toFloat() / 100
+                val parentPx = parentFontSize!!.removeSuffix("px").toFloat()
+                node.style["font-size"] = "${parentPx * nodePct}px"
             }
 
             node.children.forEach { style(it, rules) }

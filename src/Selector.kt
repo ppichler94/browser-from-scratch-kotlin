@@ -1,17 +1,23 @@
 interface Selector {
     fun matches(node: Node): Boolean = false
+
+    val specificity: Int
 }
 
 data class TagSelector(
     val tag: String,
 ) : Selector {
     override fun matches(node: Node): Boolean = node is Element && node.tag == tag
+
+    override val specificity: Int = 1
 }
 
 data class DescendantSelector(
     val ancestor: Selector,
     val descendant: Selector,
 ) : Selector {
+    override val specificity: Int = ancestor.specificity + descendant.specificity
+
     override fun matches(node: Node): Boolean {
         if (!descendant.matches(node)) {
             return false

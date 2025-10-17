@@ -92,7 +92,7 @@ class HttpClient {
         }
         request += "\r\n"
 
-        logger.debug { "Send request to ${url.origin}" }
+        logger.debug { "Send request to $url" }
         socket!!.getOutputStream().write(request.toByteArray())
         val response = parseResponse(socket!!.getInputStream())
         if (response.status in 300..<400) {
