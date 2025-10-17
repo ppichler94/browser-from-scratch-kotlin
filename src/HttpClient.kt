@@ -125,13 +125,41 @@ class HttpClient {
         val headers = headerLines.associate { it.split(": ").let { (key, value) -> key.lowercase() to value.trim() } }
         val length = headers["content-length"]?.toInt() ?: 0
         logger.info { "Read response body with length $length" }
-        require("transfer-encoding" !in headers) { "Transfer-encoding is not supported." }
         require("content-encoding" !in headers) { "Content encoding is not supported." }
 
+        val transferEncoding = headers["transfer-encoding"]?.split(",")?.map { it.trim().lowercase() } ?: listOf()
+        val body =
+            if ("chunked" in transferEncoding) {
+                readChunkedBody(inputStream)
+            } else {
+                readBody(inputStream, length)
+            }
+
+        return Response(status.toInt(), reason, headers, body)
+    }
+
+    private fun readBody(
+        inputStream: java.io.InputStream,
+        length: Int,
+    ): String {
         val bodyData = inputStream.readNBytes(length)
         require(bodyData.size == length) { "Unexpected end of body." }
-        val body = bodyData.decodeToString()
-        return Response(status.toInt(), reason, headers, body)
+        return bodyData.decodeToString()
+    }
+
+    private fun readChunkedBody(inputStream: java.io.InputStream): String {
+        var body = ""
+        while (true) {
+            val chunkHeader = readLine(inputStream)
+            val chunkSize = chunkHeader.toInt(16)
+            if (chunkSize == 0) {
+                // read \r\n
+                inputStream.readNBytes(2)
+                return body
+            }
+            body += inputStream.readNBytes(chunkSize).decodeToString()
+            inputStream.readNBytes(2)
+        }
     }
 
     private fun readLine(inputStream: java.io.InputStream): String {

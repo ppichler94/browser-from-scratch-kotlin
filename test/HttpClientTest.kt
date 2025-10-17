@@ -4,6 +4,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockserver.integration.ClientAndServer
 import org.mockserver.junit.jupiter.MockServerExtension
 import org.mockserver.junit.jupiter.MockServerSettings
+import org.mockserver.model.ConnectionOptions
 import org.mockserver.model.HttpRequest.request
 import org.mockserver.model.HttpResponse
 import org.mockserver.model.HttpResponse.response
@@ -131,6 +132,18 @@ class HttpClientTest(
 
         assertThat(response1.body).isEqualTo("Hello, MockServer!")
         assertThat(response2.body).isEqualTo("Hello again, MockServer!")
+    }
+
+    @Test
+    fun `supports chunked responses`() {
+        mockGet("/test", "Mozilla Developer Network with Chunked Encoding", {
+            withHeader("Transfer-Encoding", "chunked")
+            withConnectionOptions(ConnectionOptions().withChunkSize(10))
+        })
+
+        val response = HttpClient().get("http://localhost:1080/test")
+
+        assertThat(response.body).isEqualTo("Mozilla Developer Network with Chunked Encoding")
     }
 
     private fun mockGet(
