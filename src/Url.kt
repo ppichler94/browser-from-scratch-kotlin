@@ -21,6 +21,27 @@ fun Url(url: String): Url {
     }
 }
 
+fun Url.resolve(url: String): Url {
+    if ("://" in url) {
+        return Url(url)
+    }
+    var url = url
+    if (!url.startsWith("/")) {
+        val (dir, _) = path.split("/", limit = 2)
+        while (url.startsWith("../")) {
+            url = url.split("/", limit = 2)[1]
+            if ("/" in dir) {
+                dir.split("/", limit = 2)[0]
+            }
+        }
+        url = "$dir/$url"
+    }
+    if (url.startsWith("//")) {
+        return Url("${this.scheme}:$url")
+    }
+    return Url("$origin/$url")
+}
+
 private fun parseHttpUrl(url: String): Url {
     var (schema, rest) = url.split("://")
     var port = if (schema == "http") 80 else 443

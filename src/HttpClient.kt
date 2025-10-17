@@ -92,7 +92,7 @@ class HttpClient {
         }
         request += "\r\n"
 
-        logger.info { "Send request to ${url.origin}" }
+        logger.debug { "Send request to ${url.origin}" }
         socket!!.getOutputStream().write(request.toByteArray())
         val response = parseResponse(socket!!.getInputStream())
         if (response.status in 300..<400) {
@@ -124,7 +124,6 @@ class HttpClient {
         }
         val headers = headerLines.associate { it.split(": ").let { (key, value) -> key.lowercase() to value.trim() } }
         val length = headers["content-length"]?.toInt() ?: 0
-        logger.info { "Read response body with length $length" }
         require("content-encoding" !in headers) { "Content encoding is not supported." }
 
         val transferEncoding = headers["transfer-encoding"]?.split(",")?.map { it.trim().lowercase() } ?: listOf()

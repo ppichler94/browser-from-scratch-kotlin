@@ -1,3 +1,4 @@
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.awt.Canvas
 import java.awt.Color
 import java.awt.Graphics
@@ -10,6 +11,7 @@ class Browser : Canvas() {
     private var root: Node? = null
     private lateinit var document: BlockLayout
     private val httpClient = HttpClient()
+    private val logger = KotlinLogging.logger {}
     private val defaultStyleSheet =
         CssParser(
             this::class.java
@@ -65,14 +67,33 @@ class Browser : Canvas() {
     }
 
     fun load(url: String) {
-        var requestUrl = url
-        if (url.startsWith("view-source:")) {
-            requestUrl = url.removePrefix("view-source:")
-        }
+        val requestUrl =
+            if (url.startsWith("view-source:")) {
+                Url(url.removePrefix("view-source:"))
+            } else {
+                Url(url)
+            }
         val response = httpClient.get(requestUrl)
         val parser = if (url.startsWith("view-source")) ViewSourceHtmlParser(response.body) else HtmlParser(response.body)
         root = parser.parse()
-        HtmlParser.style(root!!, defaultStyleSheet)
+        val rules = mutableListOf<CssParser.CssRule>()
+        rules.addAll(defaultStyleSheet)
+        val links =
+            root!!
+                .treeToList()
+                .filterIsInstance<Element>()
+                .filter { it.tag == "link" && it.attributes["rel"] == "stylesheet" && "href" in it.attributes }
+                .map { it.attributes["href"]!! }
+                .map { requestUrl.resolve(it).toString() }
+                .mapNotNull {
+                    try {
+                        httpClient.get(it)
+                    } catch (e: Exception) {
+                        logger.warn { "Failed to load stylesheet: $it" }
+                        null
+                    }
+                }.forEach { rules.addAll(CssParser(it.body).parse()) }
+        HtmlParser.style(root!!, rules)
         document = DocumentLayout(root!!)
         document.layout(width)
         paintTree(document, displayList)
