@@ -7,12 +7,14 @@ data class DisplayElement(
     val y: Int,
     val text: String,
     val font: Font,
+    val color: Color,
 )
 
 data class LineElement(
     val x: Int,
     val text: String,
     val font: Font,
+    val color: Color,
 )
 
 open class BlockLayout(
@@ -25,9 +27,7 @@ open class BlockLayout(
     val fontRenderContext = FontRenderContext(null, true, true)
     var cursorX = 0
     var cursorY = 0
-    var preformatted = false
     val line = mutableListOf<LineElement>()
-    val contentHeight get() = cursorY
     protected var x: Int = 0
     protected var y: Int = 0
     protected var width: Int = 0
@@ -71,7 +71,7 @@ open class BlockLayout(
         height =
             when (mode) {
                 LayoutMode.BLOCK -> children.sumOf { it.height }
-                LayoutMode.INLINE -> contentHeight
+                LayoutMode.INLINE -> cursorY
             }
     }
 
@@ -92,9 +92,10 @@ open class BlockLayout(
         if (node is Text) {
             text(node)
         } else if (node is Element) {
-            openTag(node)
+            if (node.tag == "br") {
+                flush()
+            }
             node.children.forEach { recurse(it) }
-            closeTag(node)
         }
     }
 
@@ -106,26 +107,24 @@ open class BlockLayout(
         if (node.style["font-style"] == "italic") {
             style += Font.ITALIC
         }
-        val size = node.style["font-size"]?.toIntOrNull() ?: 12
-        if (preformatted) {
-            flush()
-            val font = Font(Font.MONOSPACED, style, size)
-            preformatted(node.content, font)
-        } else {
-            val font = Font(Font.SANS_SERIF, style, size)
-            node.content.split("\\s+".toRegex()).forEach { word(it, font) }
-        }
+        val size = node.style["font-size"]?.removeSuffix("px")?.toIntOrNull() ?: 12
+        val color = node.style["color"] ?: "black"
+        val colorCode = if (color.startsWith("#")) color else colorCode(color)
+        val fontName = node.style["font-family"] ?: "SansSerif"
+        val font = Font(fontName, style, size)
+        node.content.split("\\s+".toRegex()).forEach { word(it, font, Color.decode(colorCode)) }
     }
 
     fun word(
         word: String,
         font: Font,
+        color: Color,
     ) {
         val width = font.getStringBounds(word, fontRenderContext).width.toInt()
         if (cursorX + width > this.width) {
             flush()
         }
-        line.add(LineElement(cursorX, word, font))
+        line.add(LineElement(cursorX, word, font, color))
         cursorX += width + font.getStringBounds(" ", fontRenderContext).width.toInt()
     }
 
@@ -136,44 +135,15 @@ open class BlockLayout(
         val metrics = line.map { it.font.getLineMetrics(it.text, fontRenderContext) }
         val maxAscent = metrics.maxOfOrNull { it.ascent } ?: 0f
         val baseline = cursorY + (1.25f * maxAscent).toInt()
-        line.forEach { (relX, text, font) ->
+        line.forEach { (relX, text, font, color) ->
             val ascent = font.getLineMetrics(text, fontRenderContext).ascent
             val y = this.y + baseline - ascent.toInt()
-            displayList.add(DisplayElement(x + relX, y, text, font))
+            displayList.add(DisplayElement(x + relX, y, text, font, color))
         }
         val maxDescent = metrics.maxOfOrNull { it.descent } ?: 0f
         cursorY = baseline + (1.25f * maxDescent).toInt()
         cursorX = 0
         line.clear()
-    }
-
-    fun preformatted(
-        text: String,
-        font: Font,
-    ) {
-        cursorX = 0
-        text.split("\n").forEach {
-            displayList.add(DisplayElement(cursorX + x, cursorY + y, it, font))
-            cursorX = 0
-            cursorY += font.getLineMetrics(it, fontRenderContext).height.toInt()
-        }
-    }
-
-    fun openTag(node: Element) {
-        when (node.tag) {
-            "br" -> flush()
-            "pre" -> preformatted = true
-        }
-    }
-
-    fun closeTag(node: Element) {
-        when (node.tag) {
-            "p" -> {
-                flush()
-                cursorY += VSTEP
-            }
-            "pre" -> preformatted = false
-        }
     }
 
     open fun paint(): List<DrawCommand> =
@@ -190,7 +160,7 @@ open class BlockLayout(
             }
             if (layoutMode() == LayoutMode.INLINE) {
                 val offset = if (node is Element && node.tag == "li") 10 else 0
-                addAll(displayList.map { DrawText(it.y, it.x + offset, it.text, it.font) })
+                addAll(displayList.map { DrawText(it.y, it.x + offset, it.text, it.font, it.color) })
             }
         }
 

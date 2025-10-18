@@ -14,13 +14,17 @@ data class DrawText(
     val left: Int,
     val text: String,
     val font: Font,
+    val color: Color,
 ) : DrawCommand() {
     override fun paint(
         g: Graphics,
         scroll: Int,
     ) {
+        val previousColor = g.color
         g.font = font
+        g.color = color
         g.drawString(text, left, top - scroll + g.fontMetrics.ascent)
+        g.color = previousColor
     }
 }
 

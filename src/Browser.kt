@@ -28,6 +28,7 @@ class Browser : Canvas() {
                         return
                     }
                     document.layout(width)
+                    displayList = mutableListOf()
                     paintTree(document, displayList)
                     repaint()
                 }
@@ -98,6 +99,7 @@ class Browser : Canvas() {
         HtmlParser.style(root!!, rules)
         document = DocumentLayout(root!!)
         document.layout(width)
+        displayList = mutableListOf()
         paintTree(document, displayList)
         repaint()
     }

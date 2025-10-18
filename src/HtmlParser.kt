@@ -139,10 +139,11 @@ open class HtmlParser(
 
     companion object {
         private val INHERITED_PROPERTIES =
-            mutableMapOf(
+            mapOf(
                 "font-size" to "16px",
                 "font-style" to "normal",
                 "font-weight" to "normal",
+                "font-family" to "SansSerif",
                 "color" to "black",
             )
 
@@ -177,7 +178,7 @@ open class HtmlParser(
                     }
                 val nodePct = node.style["font-size"]!!.removeSuffix("%").toFloat() / 100
                 val parentPx = parentFontSize!!.removeSuffix("px").toFloat()
-                node.style["font-size"] = "${parentPx * nodePct}px"
+                node.style["font-size"] = "${(parentPx * nodePct).toInt()}px"
             }
 
             node.children.forEach { style(it, rules) }
