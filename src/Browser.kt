@@ -99,7 +99,6 @@ class Browser : Canvas() {
         HtmlParser.style(root!!, rules)
         document = DocumentLayout(root!!)
         document.layout(width)
-        printTree(document)
         displayList = mutableListOf()
         paintTree(document, displayList)
         repaint()

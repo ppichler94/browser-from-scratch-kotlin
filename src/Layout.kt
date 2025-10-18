@@ -44,7 +44,7 @@ class LineLayout(
 
     override fun paint(): List<DrawCommand> = listOf()
 
-    override fun toString(): String = "LineLayout(x=$x, y=$y, width=$width, height=$height)"
+    override fun toString(): String = "Line(node=$node, x=$x, y=$y, width=$width, height=$height)"
 }
 
 class TextLayout(
@@ -90,7 +90,7 @@ class TextLayout(
     lateinit var font: Font
         private set
 
-    override fun toString(): String = "TextLayout(word='$word', x=$x, y=$y, width=$width, height=$height)"
+    override fun toString(): String = "Text(node=$node, word='$word', x=$x, y=$y, width=$width, height=$height)"
 
     companion object {
         private val fontRenderContext = FontRenderContext(null, true, true)
@@ -121,15 +121,20 @@ open class BlockLayout(
         val mode = layoutMode()
         when (mode) {
             LayoutMode.BLOCK -> {
-                var previous: BlockLayout? = null
-                node.children.forEach {
-                    val next = BlockLayout(it, this, previous)
+                var previous: Layout? = null
+                groupInlineElements().forEach {
+                    val next =
+                        if (it.size > 1) {
+                            AnonymousBlockBoxLayout(it, this, previous)
+                        } else {
+                            BlockLayout(it.first(), this, previous)
+                        }
                     children.add(next)
                     previous = next
                 }
             }
             LayoutMode.INLINE -> {
-                newLine()
+                newLine(node)
                 recurse(node)
             }
         }
@@ -137,6 +142,26 @@ open class BlockLayout(
         children.forEach { it.layout(width) }
 
         height = children.sumOf { it.height }
+    }
+
+    private fun groupInlineElements(): List<List<Node>> {
+        val result = mutableListOf<List<Node>>()
+        var current = mutableListOf<Node>()
+        node.children.forEach {
+            if (it is Element && it.tag in BLOCK_ELEMENTS) {
+                if (current.isNotEmpty()) {
+                    result.add(current)
+                }
+                result.add(listOf(it))
+                current = mutableListOf()
+            } else {
+                current.add(it)
+            }
+        }
+        if (current.isNotEmpty()) {
+            result.add(current)
+        }
+        return result
     }
 
     private fun layoutMode(): LayoutMode {
@@ -157,7 +182,7 @@ open class BlockLayout(
             text(node)
         } else if (node is Element) {
             if (node.tag == "br") {
-                newLine()
+                newLine(node)
             }
             node.children.forEach { recurse(it) }
         }
@@ -172,21 +197,19 @@ open class BlockLayout(
             style += Font.ITALIC
         }
         val size = node.style["font-size"]?.removeSuffix("px")?.toIntOrNull() ?: 12
-        val color = node.style["color"] ?: "black"
-        val colorCode = if (color.startsWith("#")) color else colorCode(color)
         val fontName = node.style["font-family"] ?: "SansSerif"
         val font = Font(fontName, style, size)
-        node.content.split("\\s+".toRegex()).forEach { word(it, font, Color.decode(colorCode)) }
+        node.content.split("\\s+".toRegex()).forEach { word(it, font, node) }
     }
 
     fun word(
         word: String,
         font: Font,
-        color: Color,
+        node: Text,
     ) {
         val width = font.getStringBounds(word, fontRenderContext).width.toInt()
         if (cursorX + width > this.width) {
-            newLine()
+            newLine(node)
         }
         val line = children.last()
         val previousWord = line.children.lastOrNull() as TextLayout?
@@ -195,7 +218,7 @@ open class BlockLayout(
         cursorX += width + font.getStringBounds(" ", fontRenderContext).width.toInt()
     }
 
-    fun newLine() {
+    fun newLine(node: Node) {
         cursorX = 0
         val lastLine = children.lastOrNull()
         val newLine = LineLayout(node, this, lastLine)
@@ -216,7 +239,7 @@ open class BlockLayout(
             }
         }
 
-    override fun toString(): String = "BlockLayout(x=$x, y=$y, width=$width, height=$height)"
+    override fun toString(): String = "Block(x=$x, y=$y, width=$width, height=$height)"
 
     companion object {
         protected const val HSTEP = 13
@@ -264,6 +287,33 @@ open class BlockLayout(
     }
 }
 
+class AnonymousBlockBoxLayout(
+    private val nodes: List<Node>,
+    private val parent: Layout?,
+    private val previous: Layout?,
+) : BlockLayout(nodes.first(), parent, previous) {
+    override fun layout(frameWidth: Int) {
+        x = parent?.x ?: 0
+        width = parent?.width ?: (frameWidth - x)
+        y =
+            if (previous != null) {
+                previous.y + previous.height
+            } else {
+                parent?.y ?: 0
+            }
+
+        newLine(nodes.first())
+        nodes.forEach { recurse(it) }
+
+        children.forEach { it.layout(width) }
+        height = children.sumOf { it.height }
+    }
+
+    override fun paint(): List<DrawCommand> = listOf()
+
+    override fun toString(): String = "AnonymousBlockBox(nodes=$nodes)"
+}
+
 class DocumentLayout(
     private val node: Node,
 ) : BlockLayout(node, null, null) {
@@ -282,7 +332,7 @@ class DocumentLayout(
 
     override fun paint(): List<DrawCommand> = listOf()
 
-    override fun toString(): String = "DocumentLayout(x=$x, y=$y, width=$width, height=$height)"
+    override fun toString(): String = "Document(x=$x, y=$y, width=$width, height=$height)"
 }
 
 enum class LayoutMode {
