@@ -5,9 +5,9 @@ data class Url(
     val path: String,
     val dataContent: String,
 ) {
-    val origin get() = "$scheme://$host:$port"
+    val origin get() = if (host.isNotEmpty()) "$scheme://$host:$port" else "$scheme://"
 
-    override fun toString() = "$scheme://$host:$port$path"
+    override fun toString() = "$origin$path"
 }
 
 fun Url(url: String): Url {
@@ -27,19 +27,17 @@ fun Url.resolve(url: String): Url {
     }
     var url = url
     if (!url.startsWith("/")) {
-        val (dir, _) = path.split("/", limit = 2)
+        var dir = path.substringBeforeLast("/")
         while (url.startsWith("../")) {
             url = url.split("/", limit = 2)[1]
-            if ("/" in dir) {
-                dir.split("/", limit = 2)[0]
-            }
+            dir = dir.substringBeforeLast("/")
         }
         url = "$dir/$url"
     }
     if (url.startsWith("//")) {
         return Url("${this.scheme}:$url")
     }
-    return Url("$origin/$url")
+    return Url("$origin$url")
 }
 
 private fun parseHttpUrl(url: String): Url {
