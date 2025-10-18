@@ -1,40 +1,111 @@
 import java.awt.Color
 import java.awt.Font
 import java.awt.font.FontRenderContext
+import java.awt.font.LineMetrics
 
-data class DisplayElement(
-    val x: Int,
-    val y: Int,
-    val text: String,
-    val font: Font,
-    val color: Color,
-)
+abstract class Layout {
+    val children: MutableList<Layout> = mutableListOf()
 
-data class LineElement(
-    val x: Int,
-    val text: String,
-    val font: Font,
-    val color: Color,
-)
+    abstract fun layout(frameWidth: Int)
+
+    abstract fun paint(): List<DrawCommand>
+
+    var x: Int = 0
+    var y: Int = 0
+    var width: Int = 0
+    var height: Int = 0
+}
+
+class LineLayout(
+    private val node: Node,
+    private val parent: Layout?,
+    private val previous: Layout?,
+) : Layout() {
+    override fun layout(frameWidth: Int) {
+        width = parent?.width ?: (frameWidth - x)
+        x = parent?.x ?: 0
+
+        y =
+            if (previous != null) {
+                previous.y + previous.height
+            } else {
+                parent?.y ?: 0
+            }
+
+        children.forEach { it.layout(frameWidth) }
+
+        val maxAscent = children.maxOfOrNull { (it as TextLayout).metrics.ascent } ?: 0f
+        val baseline = y + (1.25f * maxAscent).toInt()
+        children.forEach { (it as TextLayout).y = baseline - it.metrics.ascent.toInt() }
+        val maxDescent = children.maxOfOrNull { (it as TextLayout).metrics.descent } ?: 0f
+
+        height = (1.25f * (maxAscent + maxDescent)).toInt()
+    }
+
+    override fun paint(): List<DrawCommand> = listOf()
+
+    override fun toString(): String = "LineLayout(x=$x, y=$y, width=$width, height=$height)"
+}
+
+class TextLayout(
+    private val word: String,
+    private val node: Node,
+    private val parent: Layout?,
+    private val previous: TextLayout?,
+) : Layout() {
+    override fun layout(frameWidth: Int) {
+        var style = 0
+        if (node.style["font-weight"] == "bold") {
+            style += Font.BOLD
+        }
+        if (node.style["font-style"] == "italic") {
+            style += Font.ITALIC
+        }
+        val size = node.style["font-size"]?.removeSuffix("px")?.toIntOrNull() ?: 12
+        val fontName = node.style["font-family"] ?: "SansSerif"
+        font = Font(fontName, style, size)
+
+        width = font.getStringBounds(word, fontRenderContext).width.toInt()
+        x =
+            if (previous != null) {
+                val space =
+                    previous.font
+                        .getStringBounds(" ", fontRenderContext)
+                        .width
+                        .toInt()
+                previous.x + previous.width + space
+            } else {
+                parent?.x ?: 0
+            }
+        height = font.getLineMetrics(word, fontRenderContext).height.toInt()
+    }
+
+    override fun paint(): List<DrawCommand> {
+        val color = node.style["color"] ?: "black"
+        val colorCode = if (color.startsWith("#")) color else colorCode(color)
+        return listOf(DrawText(y, x, word, font, Color.decode(colorCode)))
+    }
+
+    val metrics: LineMetrics get() = font.getLineMetrics(word, fontRenderContext)
+    lateinit var font: Font
+        private set
+
+    override fun toString(): String = "TextLayout(word='$word', x=$x, y=$y, width=$width, height=$height)"
+
+    companion object {
+        private val fontRenderContext = FontRenderContext(null, true, true)
+    }
+}
 
 open class BlockLayout(
     private val node: Node,
-    private val parent: BlockLayout?,
-    private val previous: BlockLayout?,
-    val children: MutableList<BlockLayout> = mutableListOf(),
-) {
-    private val displayList = mutableListOf<DisplayElement>()
-    val fontRenderContext = FontRenderContext(null, true, true)
+    private val parent: Layout?,
+    private val previous: Layout?,
+) : Layout() {
     var cursorX = 0
-    var cursorY = 0
-    val line = mutableListOf<LineElement>()
-    protected var x: Int = 0
-    protected var y: Int = 0
-    protected var width: Int = 0
-    var height: Int = 0
-        protected set
+    val fontRenderContext = FontRenderContext(null, true, true)
 
-    open fun layout(frameWidth: Int) {
+    override fun layout(frameWidth: Int) {
         if (node is Element && node.tag == "head") {
             return
         }
@@ -58,21 +129,14 @@ open class BlockLayout(
                 }
             }
             LayoutMode.INLINE -> {
-                cursorX = 0
-                cursorY = 0
-                line.clear()
+                newLine()
                 recurse(node)
-                flush()
             }
         }
 
         children.forEach { it.layout(width) }
 
-        height =
-            when (mode) {
-                LayoutMode.BLOCK -> children.sumOf { it.height }
-                LayoutMode.INLINE -> cursorY
-            }
+        height = children.sumOf { it.height }
     }
 
     private fun layoutMode(): LayoutMode {
@@ -93,7 +157,7 @@ open class BlockLayout(
             text(node)
         } else if (node is Element) {
             if (node.tag == "br") {
-                flush()
+                newLine()
             }
             node.children.forEach { recurse(it) }
         }
@@ -122,31 +186,23 @@ open class BlockLayout(
     ) {
         val width = font.getStringBounds(word, fontRenderContext).width.toInt()
         if (cursorX + width > this.width) {
-            flush()
+            newLine()
         }
-        line.add(LineElement(cursorX, word, font, color))
+        val line = children.last()
+        val previousWord = line.children.lastOrNull() as TextLayout?
+        val text = TextLayout(word, node, line, previousWord)
+        line.children.add(text)
         cursorX += width + font.getStringBounds(" ", fontRenderContext).width.toInt()
     }
 
-    fun flush() {
-        if (line.isEmpty()) {
-            return
-        }
-        val metrics = line.map { it.font.getLineMetrics(it.text, fontRenderContext) }
-        val maxAscent = metrics.maxOfOrNull { it.ascent } ?: 0f
-        val baseline = cursorY + (1.25f * maxAscent).toInt()
-        line.forEach { (relX, text, font, color) ->
-            val ascent = font.getLineMetrics(text, fontRenderContext).ascent
-            val y = this.y + baseline - ascent.toInt()
-            displayList.add(DisplayElement(x + relX, y, text, font, color))
-        }
-        val maxDescent = metrics.maxOfOrNull { it.descent } ?: 0f
-        cursorY = baseline + (1.25f * maxDescent).toInt()
+    fun newLine() {
         cursorX = 0
-        line.clear()
+        val lastLine = children.lastOrNull()
+        val newLine = LineLayout(node, this, lastLine)
+        children.add(newLine)
     }
 
-    open fun paint(): List<DrawCommand> =
+    override fun paint(): List<DrawCommand> =
         buildList {
             val bgcolor = if (node is Element) node.style["background-color"] ?: "transparent" else "transparent"
             if (bgcolor != "transparent") {
@@ -158,11 +214,9 @@ open class BlockLayout(
             if (node is Element && node.tag == "li") {
                 add(DrawRect(y + 6, x + 2, y + 14, x + 8, Color.LIGHT_GRAY))
             }
-            if (layoutMode() == LayoutMode.INLINE) {
-                val offset = if (node is Element && node.tag == "li") 10 else 0
-                addAll(displayList.map { DrawText(it.y, it.x + offset, it.text, it.font, it.color) })
-            }
         }
+
+    override fun toString(): String = "BlockLayout(x=$x, y=$y, width=$width, height=$height)"
 
     companion object {
         protected const val HSTEP = 13
@@ -227,6 +281,8 @@ class DocumentLayout(
     }
 
     override fun paint(): List<DrawCommand> = listOf()
+
+    override fun toString(): String = "DocumentLayout(x=$x, y=$y, width=$width, height=$height)"
 }
 
 enum class LayoutMode {
@@ -235,9 +291,17 @@ enum class LayoutMode {
 }
 
 fun paintTree(
-    layoutObject: BlockLayout,
+    layoutObject: Layout,
     displayList: MutableList<DrawCommand>,
 ) {
     displayList.addAll(layoutObject.paint())
     layoutObject.children.forEach { paintTree(it, displayList) }
+}
+
+fun printTree(
+    layoutObject: Layout,
+    indent: String = "",
+) {
+    println("$indent$layoutObject")
+    layoutObject.children.forEach { printTree(it, "$indent  ") }
 }
