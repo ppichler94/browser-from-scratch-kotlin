@@ -4,6 +4,8 @@ import java.awt.Color
 import java.awt.Graphics
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
+import java.awt.event.MouseEvent
+import javax.swing.event.MouseInputAdapter
 
 class Browser : Canvas() {
     private var displayList: MutableList<DrawCommand> = mutableListOf()
@@ -12,6 +14,8 @@ class Browser : Canvas() {
     private lateinit var document: BlockLayout
     private val httpClient = HttpClient()
     private val logger = KotlinLogging.logger {}
+    private var url = Url("http://localhost:8080")
+    var onLoad: (url: String) -> Unit = {}
     private val defaultStyleSheet =
         CssParser(
             this::class.java
@@ -48,6 +52,16 @@ class Browser : Canvas() {
             }
             repaint()
         }
+
+        addMouseListener(
+            object : MouseInputAdapter() {
+                override fun mouseClicked(e: MouseEvent) {
+                    if (e.button == MouseEvent.BUTTON1) {
+                        click(e.x, e.y)
+                    }
+                }
+            },
+        )
     }
 
     override fun paint(g: Graphics) {
@@ -67,15 +81,23 @@ class Browser : Canvas() {
         g.fillRect(width - 12, scrollbarY.toInt(), 8, scrollbarHeight)
     }
 
-    fun load(url: String) {
-        val requestUrl =
-            if (url.startsWith("view-source:")) {
-                Url(url.removePrefix("view-source:"))
+    fun load(urlToLoad: String) {
+        url =
+            if (urlToLoad.startsWith("view-source:")) {
+                Url(urlToLoad.removePrefix("view-source:"))
             } else {
-                Url(url)
+                Url(urlToLoad)
             }
-        val response = httpClient.get(requestUrl)
-        val parser = if (url.startsWith("view-source")) ViewSourceHtmlParser(response.body) else HtmlParser(response.body)
+        val viewSource = urlToLoad.startsWith("view-source")
+        load(url, viewSource)
+    }
+
+    fun load(
+        url: Url,
+        viewSource: Boolean = false,
+    ) {
+        val response = httpClient.get(url)
+        val parser = if (viewSource) ViewSourceHtmlParser(response.body) else HtmlParser(response.body)
         root = parser.parse()
         val rules = mutableListOf<CssParser.CssRule>()
         rules.addAll(defaultStyleSheet)
@@ -84,7 +106,7 @@ class Browser : Canvas() {
             .filterIsInstance<Element>()
             .filter { it.tag == "link" && it.attributes["rel"] == "stylesheet" && "href" in it.attributes }
             .map { it.attributes["href"]!! }
-            .map { requestUrl.resolve(it).toString() }
+            .map { url.resolve(it).toString() }
             .mapNotNull {
                 try {
                     httpClient.get(it)
@@ -102,5 +124,30 @@ class Browser : Canvas() {
         displayList = mutableListOf()
         paintTree(document, displayList)
         repaint()
+        onLoad(url.toString())
+    }
+
+    private fun click(
+        x: Int,
+        y: Int,
+    ) {
+        val y = y + scroll
+        val objects =
+            document
+                .treeToList()
+                .filter { x in it.x..it.x + it.width && y in it.y..it.y + it.height }
+        if (objects.isEmpty()) {
+            return
+        }
+        var element: Node? = objects.last().node
+        while (element != null) {
+            if (element is Element && element.tag == "a" && "href" in element.attributes) {
+                val url = url.resolve(element.attributes["href"]!!)
+                load(url)
+                return
+            }
+
+            element = element.parent
+        }
     }
 }

@@ -17,6 +17,7 @@ fun main() {
     val urlLabel = Label("URL:")
     val urlField = TextField(50) // Set width for the text field
     urlField.addActionListener { canvas.load(urlField.text) }
+    canvas.onLoad = { urlField.text = it }
     val button = Button("Go!")
     button.addActionListener { canvas.load(urlField.text) }
     addressBar.add(urlLabel)

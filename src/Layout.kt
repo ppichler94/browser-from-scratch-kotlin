@@ -5,6 +5,8 @@ import java.awt.font.LineMetrics
 
 abstract class Layout {
     val children: MutableList<Layout> = mutableListOf()
+    abstract val parent: Layout?
+    abstract val node: Node
 
     abstract fun layout(frameWidth: Int)
 
@@ -17,8 +19,8 @@ abstract class Layout {
 }
 
 class LineLayout(
-    private val node: Node,
-    private val parent: Layout?,
+    override val node: Node,
+    override val parent: Layout?,
     private val previous: Layout?,
 ) : Layout() {
     override fun layout(frameWidth: Int) {
@@ -49,8 +51,8 @@ class LineLayout(
 
 class TextLayout(
     private val word: String,
-    private val node: Node,
-    private val parent: Layout?,
+    override val node: Node,
+    override val parent: Layout?,
     private val previous: TextLayout?,
 ) : Layout() {
     override fun layout(frameWidth: Int) {
@@ -98,15 +100,15 @@ class TextLayout(
 }
 
 open class BlockLayout(
-    private val node: Node,
-    private val parent: Layout?,
+    override val node: Node,
+    override val parent: Layout?,
     private val previous: Layout?,
 ) : Layout() {
     var cursorX = 0
     val fontRenderContext = FontRenderContext(null, true, true)
 
     override fun layout(frameWidth: Int) {
-        if (node is Element && node.tag == "head") {
+        if (node is Element && (node as Element).tag == "head") {
             return
         }
         x = parent?.x ?: 0
@@ -234,7 +236,7 @@ open class BlockLayout(
                 val bgColorCode = if (bgcolor.startsWith("#")) bgcolor else colorCode(bgcolor)
                 add(DrawRect(y, x, y2, x2, Color.decode(bgColorCode)))
             }
-            if (node is Element && node.tag == "li") {
+            if (node is Element && (node as Element).tag == "li") {
                 add(DrawRect(y + 6, x + 2, y + 14, x + 8, Color.LIGHT_GRAY))
             }
         }
@@ -289,7 +291,7 @@ open class BlockLayout(
 
 class AnonymousBlockBoxLayout(
     private val nodes: List<Node>,
-    private val parent: Layout?,
+    override val parent: Layout?,
     private val previous: Layout?,
 ) : BlockLayout(nodes.first(), parent, previous) {
     override fun layout(frameWidth: Int) {
@@ -315,9 +317,10 @@ class AnonymousBlockBoxLayout(
 }
 
 class DocumentLayout(
-    private val node: Node,
+    override val node: Node,
 ) : BlockLayout(node, null, null) {
     override fun layout(frameWidth: Int) {
+        children.clear()
         val child = BlockLayout(node, this, null)
         children.add(child)
 
@@ -354,4 +357,11 @@ fun printTree(
 ) {
     println("$indent$layoutObject")
     layoutObject.children.forEach { printTree(it, "$indent  ") }
+}
+
+fun Layout.treeToList(): List<Layout> {
+    val result = mutableListOf<Layout>()
+    result.add(this)
+    children.forEach { result.addAll(it.treeToList()) }
+    return result
 }

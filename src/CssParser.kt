@@ -88,7 +88,7 @@ class CssParser(
                         break
                     }
                 } catch (e: Exception) {
-                    logger.warn { e.message }
+                    logger.debug { e.message }
                     if (ignoreUntil(";}") == ';') {
                         literal(';')
                         whitespace()
@@ -124,7 +124,7 @@ class CssParser(
                     literal('}')
                     add(Pair(selector, body))
                 } catch (e: Exception) {
-                    logger.warn { e.message }
+                    logger.debug { e.message }
                     if (ignoreUntil("}") == '}') {
                         literal('}')
                         whitespace()

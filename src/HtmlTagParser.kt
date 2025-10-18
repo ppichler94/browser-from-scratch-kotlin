@@ -66,7 +66,7 @@ class HtmlTagParser(
                     }
                     whitespace()
                 } catch (e: Exception) {
-                    logger.warn { e.message }
+                    logger.debug { e.message }
                     if (ignoreUntil(" ") == ' ') {
                         whitespace()
                     } else {
