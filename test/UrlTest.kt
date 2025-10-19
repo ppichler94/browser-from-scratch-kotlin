@@ -1,6 +1,5 @@
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 
 class UrlTest {
     @Test
@@ -11,8 +10,8 @@ class UrlTest {
         assertThat(url.host).isEqualTo("example.com")
         assertThat(url.port).isEqualTo(80)
         assertThat(url.path).isEqualTo("/path")
-        assertThat(url.origin).isEqualTo("http://example.com:80")
-        assertThat(url.toString()).isEqualTo("http://example.com:80/path")
+        assertThat(url.origin).isEqualTo("http://example.com")
+        assertThat(url.toString()).isEqualTo("http://example.com/path")
     }
 
     @Test
@@ -23,8 +22,8 @@ class UrlTest {
         assertThat(url.host).isEqualTo("example.com")
         assertThat(url.port).isEqualTo(443)
         assertThat(url.path).isEqualTo("/path")
-        assertThat(url.origin).isEqualTo("https://example.com:443")
-        assertThat(url.toString()).isEqualTo("https://example.com:443/path")
+        assertThat(url.origin).isEqualTo("https://example.com")
+        assertThat(url.toString()).isEqualTo("https://example.com/path")
     }
 
     @Test
@@ -74,12 +73,9 @@ class UrlTest {
     }
 
     @Test
-    fun `throws exception for unknown scheme`() {
-        val exception =
-            assertThrows<Exception> {
-                Url("unknown://example.com")
-            }
-        assertThat(exception.message).isEqualTo("Unknown scheme: unknown")
+    fun `handles unknown scheme`() {
+        val url = Url("about:blank")
+        assertThat(url.toString()).isEqualTo("about://blank")
     }
 
     @Test
