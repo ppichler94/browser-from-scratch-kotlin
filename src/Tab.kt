@@ -12,7 +12,10 @@ class Tab(
     private lateinit var document: BlockLayout
     private val httpClient = HttpClient()
     private val logger = KotlinLogging.logger {}
-    private var url = Url("http://localhost:8080")
+    private val history = mutableListOf<Url>()
+    var onLoad: () -> Unit = {}
+    var url = Url("about:blank")
+        private set
     private val defaultStyleSheet =
         CssParser(
             this::class.java
@@ -25,7 +28,24 @@ class Tab(
         x: Int,
         y: Int,
     ) {
-        logger.debug { "Clicked at ($x, $y)" }
+        val y = y + scroll
+        val objects =
+            document
+                .treeToList()
+                .filter { x in it.x..it.x + it.width && y in it.y..it.y + it.height }
+        if (objects.isEmpty()) {
+            return
+        }
+        var element: Node? = objects.last().node
+        while (element != null) {
+            if (element is Element && element.tag == "a" && "href" in element.attributes) {
+                val url = url.resolve(element.attributes["href"]!!)
+                load(url)
+                return
+            }
+
+            element = element.parent
+        }
     }
 
     fun scroll(rotation: Int) {
@@ -65,6 +85,7 @@ class Tab(
 
     fun load(urlToLoad: String) {
         if (urlToLoad == "about:blank") {
+            url = Url(urlToLoad)
             return
         }
         url =
@@ -81,6 +102,8 @@ class Tab(
         url: Url,
         viewSource: Boolean = false,
     ) {
+        this.url = url
+        history.add(url)
         val response = httpClient.get(url)
         val parser = if (viewSource) ViewSourceHtmlParser(response.body) else HtmlParser(response.body)
         root = parser.parse()
@@ -108,6 +131,15 @@ class Tab(
         document.layout(width)
         displayList = mutableListOf()
         paintTree(document, displayList)
+        onLoad()
+    }
+
+    fun goBack() {
+        if (history.size <= 1) {
+            return
+        }
+        history.removeLast()
+        load(history.removeLast())
     }
 
     private fun drawScrollbar(

@@ -5,19 +5,23 @@ data class Url(
     val path: String,
     val dataContent: String,
 ) {
-    val origin get() = if (host.isNotEmpty()) "$scheme://$host:$port" else "$scheme://"
+    val origin: String
+        get() {
+            val portPart = if (port != 80 && port != 443) ":$port" else ""
+            return if (host.isNotEmpty()) "$scheme://$host$portPart" else "$scheme://"
+        }
 
     override fun toString() = "$origin$path"
 }
 
 fun Url(url: String): Url {
-    val (scheme, _) = url.split(":")
+    val (scheme, rest) = url.split(":")
     return when (scheme) {
         "http" -> parseHttpUrl(url)
         "https" -> parseHttpUrl(url)
         "file" -> parseFileUrl(url)
         "data" -> parseDataUrl(url)
-        else -> throw Exception("Unknown scheme: $scheme")
+        else -> Url(scheme, "", 0, rest, "")
     }
 }
 
