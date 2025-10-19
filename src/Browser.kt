@@ -69,7 +69,7 @@ class Browser : Canvas() {
 
     fun newTab(url: String) {
         val newTab = Tab(width, height - chrome.bottom)
-        newTab.onLoad = { repaint() }
+        newTab.repaint = { repaint() }
         newTab.load(url)
         tabs.add(newTab)
         currentTab = tabs.size - 1

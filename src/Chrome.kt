@@ -61,7 +61,7 @@ class Chrome(
     fun paint(): List<DrawCommand> =
         buildList {
             add(DrawRect(0, 0, bottom, browser.width, "white"))
-            add(DrawLine(0, tabbarBottom, browser.width, tabbarBottom, "black", 1))
+            add(DrawLine(0, bottom, browser.width, bottom, "black", 1))
 
             add(DrawOutline(newTabRect, "black", 1))
             add(DrawText(newTabRect.top, newTabRect.left + padding, "+", font, "black"))
@@ -73,9 +73,8 @@ class Chrome(
                 add(DrawText(rect.top + padding, rect.left + padding, "Tab ${index + 1}", font, "black"))
 
                 if (index == browser.currentTab) {
-//                    add(DrawLine(0, rect.bottom, rect.left, rect.bottom, "blue", 1))
-//                    add(DrawLine(rect.right, rect.bottom, browser.width, rect.bottom, "blue", 1))
-                    add(DrawRect(rect.top + 2, rect.left + 2, rect.top + 6, rect.left + 6, "black"))
+                    add(DrawLine(0, rect.bottom, rect.left, rect.bottom, "black", 1))
+                    add(DrawLine(rect.right, rect.bottom, browser.width, rect.bottom, "black", 1))
                 }
             }
 
