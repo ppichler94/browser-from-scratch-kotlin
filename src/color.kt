@@ -147,5 +147,5 @@ fun colorCode(name: String): String =
         "whitesmoke" -> "#F5F5F5"
         "yellow" -> "#FFFF00"
         "yellowgreen" -> "#9ACD32"
-        else -> "#000000"
+        else -> if (name.startsWith("#")) name else "#000000"
     }

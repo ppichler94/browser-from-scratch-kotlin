@@ -1,4 +1,3 @@
-import java.awt.Color
 import java.awt.Font
 import java.awt.font.FontRenderContext
 import java.awt.font.LineMetrics
@@ -82,11 +81,7 @@ class TextLayout(
         height = font.getLineMetrics(word, fontRenderContext).height.toInt()
     }
 
-    override fun paint(): List<DrawCommand> {
-        val color = node.style["color"] ?: "black"
-        val colorCode = if (color.startsWith("#")) color else colorCode(color)
-        return listOf(DrawText(y, x, word, font, Color.decode(colorCode)))
-    }
+    override fun paint(): List<DrawCommand> = listOf(DrawText(y, x, word, font, node.style["color"] ?: "black"))
 
     val metrics: LineMetrics get() = font.getLineMetrics(word, fontRenderContext)
     lateinit var font: Font
@@ -233,11 +228,10 @@ open class BlockLayout(
             if (bgcolor != "transparent") {
                 val x2 = x + width
                 val y2 = y + height
-                val bgColorCode = if (bgcolor.startsWith("#")) bgcolor else colorCode(bgcolor)
-                add(DrawRect(y, x, y2, x2, Color.decode(bgColorCode)))
+                add(DrawRect(y, x, y2, x2, bgcolor))
             }
             if (node is Element && (node as Element).tag == "li") {
-                add(DrawRect(y + 6, x + 2, y + 14, x + 8, Color.LIGHT_GRAY))
+                add(DrawRect(y + 6, x + 2, y + 14, x + 8, "lightgray"))
             }
         }
 

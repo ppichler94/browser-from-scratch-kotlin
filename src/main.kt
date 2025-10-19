@@ -3,7 +3,8 @@ import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 import kotlin.system.exitProcess
 
-fun main() {
+fun main(args: Array<String>) {
+    val initialUrl = args.getOrNull(0) ?: "about:blank"
     val window = Frame("Browser")
     window.setSize(800, 600)
     window.layout = BorderLayout()
@@ -37,4 +38,6 @@ fun main() {
     )
 
     window.isVisible = true
+
+    canvas.newTab(initialUrl)
 }
