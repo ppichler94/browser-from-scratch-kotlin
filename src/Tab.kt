@@ -150,7 +150,7 @@ class Tab(
         val relativePageHeight = height.toDouble() / document.height.toDouble()
         val scrollbarHeight = (height * relativePageHeight).toInt()
         val scrollbarY = scroll / document.height.toDouble() * height + offset
-        g.color = Color.BLUE
+        g.color = Color(105, 105, 105)
         g.fillRect(width - 12, scrollbarY.toInt(), 8, scrollbarHeight)
     }
 }

@@ -1,15 +1,12 @@
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.awt.Canvas
 import java.awt.Graphics
-import java.awt.event.ComponentAdapter
-import java.awt.event.ComponentEvent
-import java.awt.event.MouseEvent
+import java.awt.event.*
 import javax.swing.event.MouseInputAdapter
 
 class Browser : Canvas() {
     val tabs = mutableListOf<Tab>()
     var currentTab = 0
-    var onLoad: (url: String) -> Unit = {}
     private val logger = KotlinLogging.logger {}
     private val chrome = Chrome(this)
 
@@ -17,20 +14,19 @@ class Browser : Canvas() {
         addComponentListener(
             object : ComponentAdapter() {
                 override fun componentResized(e: ComponentEvent) {
-                    if (currentTab >= tabs.size) {
-                        return
+                    if (currentTab < tabs.size) {
+                        tabs[currentTab].resized(e.component.width, e.component.height - chrome.bottom)
                     }
-                    tabs[currentTab].resized(e.component.width, e.component.height - chrome.bottom)
+                    chrome.resized()
                     repaint()
                 }
             },
         )
 
         addMouseWheelListener {
-            if (currentTab >= tabs.size) {
-                return@addMouseWheelListener
+            if (currentTab < tabs.size) {
+                tabs[currentTab].scroll(it.wheelRotation)
             }
-            tabs[currentTab].scroll(it.wheelRotation)
             repaint()
         }
 
@@ -43,6 +39,29 @@ class Browser : Canvas() {
                         } else {
                             tabs[currentTab].click(e.x, e.y - chrome.bottom)
                         }
+                    }
+                    repaint()
+                }
+            },
+        )
+
+        addKeyListener(
+            object : KeyAdapter() {
+                override fun keyTyped(e: KeyEvent) {
+                    if (e.keyChar in 0x20.toChar()..0x7F.toChar()) {
+                        chrome.keyPress(e.keyChar)
+                    }
+
+                    repaint()
+                }
+
+                override fun keyPressed(e: KeyEvent) {
+                    if (e.keyCode == KeyEvent.VK_ENTER) {
+                        chrome.enter()
+                    }
+
+                    if (e.keyCode == KeyEvent.VK_BACK_SPACE) {
+                        chrome.backspace()
                     }
                     repaint()
                 }
@@ -65,7 +84,6 @@ class Browser : Canvas() {
         }
         tabs[currentTab].load(url)
         repaint()
-        onLoad(url)
     }
 
     fun newTab(url: String) {
@@ -73,12 +91,6 @@ class Browser : Canvas() {
         newTab.load(url)
         tabs.add(newTab)
         currentTab = tabs.size - 1
-        onLoad(url)
-        repaint()
-    }
-
-    fun selectTab(index: Int) {
-        currentTab = index
         repaint()
     }
 }

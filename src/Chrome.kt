@@ -22,8 +22,12 @@ class Chrome(
     private val tabbarTop = 0
     private val tabbarBottom: Int
     private val newTabRect: Rect
-    private val addressRect: Rect
+    private var addressRect: Rect
+    private var addressBar: String = ""
     private val backRect: Rect
+    private val urlBarTop: Int
+    private val urlBarBottom: Int
+    private var focus = FocusElement.None
     val bottom: Int
 
     init {
@@ -38,13 +42,13 @@ class Chrome(
                 padding + fontHeight.toInt(),
             )
 
-        val urlBarTop = tabbarBottom
-        val urlBarBottom = urlBarTop + 2 * padding + fontHeight.toInt()
+        urlBarTop = tabbarBottom
+        urlBarBottom = urlBarTop + 2 * padding + fontHeight.toInt()
         val backWidth = font.getStringBounds("<", fontRenderContext).width.toInt() + 2 * padding
-        backRect = Rect(padding, urlBarTop + padding, padding + backWidth, urlBarBottom - padding)
-        addressRect = Rect(backRect.right + padding, urlBarTop + padding, browser.width - padding, urlBarBottom - padding)
+        backRect = Rect(padding, urlBarTop + padding, padding + backWidth, urlBarBottom)
+        addressRect = Rect(backRect.right + padding, urlBarTop + padding, browser.width - padding, urlBarBottom)
 
-        bottom = urlBarBottom
+        bottom = urlBarBottom + padding
     }
 
     fun tabRect(index: Int): Rect {
@@ -61,43 +65,92 @@ class Chrome(
     fun paint(): List<DrawCommand> =
         buildList {
             add(DrawRect(0, 0, bottom, browser.width, "white"))
-            add(DrawLine(0, bottom, browser.width, bottom, "black", 1))
+            add(DrawLine(0, bottom, browser.width, bottom, "gray", 1))
 
-            add(DrawOutline(newTabRect, "black", 1))
+            add(DrawOutline(newTabRect, "dimgray", 1))
             add(DrawText(newTabRect.top, newTabRect.left + padding, "+", font, "black"))
 
             browser.tabs.forEachIndexed { index, _ ->
                 val rect = tabRect(index)
-                add(DrawLine(rect.left, 0, rect.left, rect.bottom, "black", 1))
-                add(DrawLine(rect.right, 0, rect.right, rect.bottom, "black", 1))
+                add(DrawLine(rect.left, 0, rect.left, rect.bottom, "gray", 1))
+                add(DrawLine(rect.right, 0, rect.right, rect.bottom, "gray", 1))
                 add(DrawText(rect.top + padding, rect.left + padding, "Tab ${index + 1}", font, "black"))
 
                 if (index == browser.currentTab) {
-                    add(DrawLine(0, rect.bottom, rect.left, rect.bottom, "black", 1))
-                    add(DrawLine(rect.right, rect.bottom, browser.width, rect.bottom, "black", 1))
+                    add(DrawLine(0, rect.bottom, rect.left, rect.bottom, "gray", 1))
+                    add(DrawLine(rect.right, rect.bottom, browser.width, rect.bottom, "gray", 1))
                 }
             }
 
-            add(DrawOutline(backRect, "black", 1))
+            // back button
+            add(DrawOutline(backRect, "dimgray", 1))
             add(DrawText(backRect.top, backRect.left + padding, "<", font, "black"))
-            add(DrawOutline(addressRect, "black", 1))
-            add(DrawText(addressRect.top, addressRect.left + padding, browser.tabs[browser.currentTab].url.toString(), font, "black"))
+            // address bar
+            add(DrawOutline(addressRect, "dimgray", 1))
+            if (focus == FocusElement.AddressBar) {
+                add(DrawText(addressRect.top, addressRect.left + padding, addressBar, font, "black"))
+                val textWidth = font.getStringBounds(addressBar, fontRenderContext).width.toInt()
+                add(
+                    DrawLine(
+                        addressRect.left + padding + textWidth,
+                        addressRect.top,
+                        addressRect.left + padding + textWidth,
+                        addressRect.bottom,
+                        "red",
+                        1,
+                    ),
+                )
+            } else {
+                add(DrawText(addressRect.top, addressRect.left + padding, browser.tabs[browser.currentTab].url.toString(), font, "black"))
+            }
         }
 
     fun click(
         x: Int,
         y: Int,
     ) {
+        focus = FocusElement.None
         if (newTabRect.contains(x, y)) {
             browser.newTab("about:blank")
         } else if (backRect.contains(x, y)) {
             browser.tabs[browser.currentTab].goBack()
+        } else if (addressRect.contains(x, y)) {
+            focus = FocusElement.AddressBar
+            addressBar = ""
         } else {
             browser.tabs.forEachIndexed { index, _ ->
                 if (tabRect(index).contains(x, y)) {
-                    browser.selectTab(index)
+                    browser.currentTab = index
                 }
             }
         }
+    }
+
+    fun keyPress(key: Char) {
+        if (focus == FocusElement.AddressBar) {
+            addressBar += key
+        }
+    }
+
+    fun enter() {
+        if (focus == FocusElement.AddressBar) {
+            browser.load(addressBar)
+            addressBar = ""
+        }
+    }
+
+    fun backspace() {
+        if (focus == FocusElement.AddressBar) {
+            addressBar = addressBar.dropLast(1)
+        }
+    }
+
+    fun resized() {
+        addressRect = Rect(backRect.right + padding, urlBarTop + padding, browser.width - padding, urlBarBottom)
+    }
+
+    enum class FocusElement {
+        AddressBar,
+        None,
     }
 }
