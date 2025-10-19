@@ -13,7 +13,6 @@ class Tab(
     private val httpClient = HttpClient()
     private val logger = KotlinLogging.logger {}
     private val history = mutableListOf<Url>()
-    var repaint: () -> Unit = {}
     var url = Url("about:blank")
         private set
     private val defaultStyleSheet =
@@ -59,7 +58,6 @@ class Tab(
         if (scroll > document.height - height) {
             scroll = document.height - height
         }
-        repaint()
     }
 
     fun resized(
@@ -74,7 +72,6 @@ class Tab(
         document.layout(width)
         displayList = mutableListOf()
         paintTree(document, displayList)
-        repaint()
     }
 
     fun paint(
@@ -133,7 +130,6 @@ class Tab(
         document.layout(width)
         displayList = mutableListOf()
         paintTree(document, displayList)
-        repaint()
     }
 
     fun goBack() {

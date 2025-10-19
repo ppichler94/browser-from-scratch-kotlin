@@ -44,6 +44,7 @@ class Browser : Canvas() {
                             tabs[currentTab].click(e.x, e.y - chrome.bottom)
                         }
                     }
+                    repaint()
                 }
             },
         )
@@ -69,7 +70,6 @@ class Browser : Canvas() {
 
     fun newTab(url: String) {
         val newTab = Tab(width, height - chrome.bottom)
-        newTab.repaint = { repaint() }
         newTab.load(url)
         tabs.add(newTab)
         currentTab = tabs.size - 1
