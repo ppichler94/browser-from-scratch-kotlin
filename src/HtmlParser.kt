@@ -54,30 +54,40 @@ open class HtmlParser(
         var entity = ""
         var inTag = false
         var inEntity = false
+        var inAttribute = false
+        var inScript: Boolean
 
         for (char in html) {
-            if (char == '<') {
-                inTag = true
-                if (text.isNotEmpty()) {
-                    addText(text)
+            inScript = unfinished.lastOrNull() is Element && (unfinished.last() as Element).tag == "script"
+            when (char) {
+                '"' if (inTag) -> inAttribute = !inAttribute
+                '<' if (!inAttribute && !inScript) -> {
+                    inTag = true
+                    if (text.isNotEmpty()) {
+                        addText(text)
+                    }
+                    text = ""
                 }
-                text = ""
-            } else if (char == '>') {
-                inTag = false
-                addTag(text)
-                text = ""
-            } else if (!inTag && char == '&') {
-                inEntity = true
-            } else if (inEntity) {
-                if (char == ';') {
+                '>' if (inScript && !text.endsWith("</script")) -> text += char
+                '>' if (inScript) -> {
+                    addText(text.substringBeforeLast("</script"))
+                    addTag("/script")
+                    text = ""
+                    inTag = false
+                }
+                '>' -> {
+                    inTag = false
+                    addTag(text)
+                    text = ""
+                }
+                '&' if (!inTag && !inAttribute && !inScript) -> inEntity = true
+                ';' if (inEntity) -> {
                     text += getEntity(entity)
                     inEntity = false
                     entity = ""
-                } else {
-                    entity += char
                 }
-            } else {
-                text += char
+                else if (inEntity) -> entity += char
+                else -> text += char
             }
         }
         if (!inTag && text.isNotEmpty()) {
