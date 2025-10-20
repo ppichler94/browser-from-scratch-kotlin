@@ -60,7 +60,10 @@ open class HtmlParser(
         for (char in html) {
             inScript = unfinished.lastOrNull() is Element && (unfinished.last() as Element).tag == "script"
             when (char) {
-                '"' if (inTag) -> inAttribute = !inAttribute
+                '"' if (inTag) -> {
+                    inAttribute = !inAttribute
+                    text += char
+                }
                 '<' if (!inAttribute && !inScript) -> {
                     inTag = true
                     if (text.isNotEmpty()) {
@@ -68,14 +71,14 @@ open class HtmlParser(
                     }
                     text = ""
                 }
-                '>' if (inScript && !text.endsWith("</script")) -> text += char
-                '>' if (inScript) -> {
+                '>' if (!inAttribute && inScript && !text.endsWith("</script")) -> text += char
+                '>' if (!inAttribute && inScript) -> {
                     addText(text.substringBeforeLast("</script"))
                     addTag("/script")
                     text = ""
                     inTag = false
                 }
-                '>' -> {
+                '>' if (!inAttribute) -> {
                     inTag = false
                     addTag(text)
                     text = ""

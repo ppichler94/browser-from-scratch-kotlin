@@ -13,6 +13,7 @@ class Tab(
     private val httpClient = HttpClient()
     private val logger = KotlinLogging.logger {}
     private val history = mutableListOf<Url>()
+    private val forwardHistory = mutableListOf<Url>()
     var title: String = "Untitled"
         private set
     var url = Url("about:blank")
@@ -98,7 +99,11 @@ class Tab(
     fun load(
         url: Url,
         viewSource: Boolean = false,
+        clearForwardHistory: Boolean = true,
     ) {
+        if (clearForwardHistory) {
+            forwardHistory.clear()
+        }
         this.url = url
         history.add(url)
         val body = getContent(url)
@@ -160,8 +165,16 @@ class Tab(
         if (history.size <= 1) {
             return
         }
-        history.removeLast()
-        load(history.removeLast())
+        val current = history.removeLast()
+        forwardHistory.add(current)
+        load(history.removeLast(), false, false)
+    }
+
+    fun goForward() {
+        if (forwardHistory.isEmpty()) {
+            return
+        }
+        load(forwardHistory.removeLast())
     }
 
     private fun drawScrollbar(

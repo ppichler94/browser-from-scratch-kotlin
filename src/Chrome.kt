@@ -25,10 +25,13 @@ class Chrome(
     private var addressRect: Rect
     private var addressBar: String = ""
     private val backRect: Rect
+    private val forwardRect: Rect
     private val urlBarTop: Int
     private val urlBarBottom: Int
     private var focus = FocusElement.None
     val bottom: Int
+
+    private val currentTab: Tab? get() = browser.tabs.getOrNull(browser.currentTab)
 
     init {
         val fontHeight = font.getLineMetrics("Tab", fontRenderContext).height
@@ -46,7 +49,8 @@ class Chrome(
         urlBarBottom = urlBarTop + 2 * padding + fontHeight.toInt()
         val backWidth = font.getStringBounds("<", fontRenderContext).width.toInt() + 2 * padding
         backRect = Rect(padding, urlBarTop + padding, padding + backWidth, urlBarBottom)
-        addressRect = Rect(backRect.right + padding, urlBarTop + padding, browser.width - padding, urlBarBottom)
+        forwardRect = Rect(backRect.right + padding, urlBarTop + padding, backRect.right + padding + backWidth, urlBarBottom)
+        addressRect = Rect(forwardRect.right + padding, urlBarTop + padding, browser.width - padding, urlBarBottom)
 
         bottom = urlBarBottom + padding
     }
@@ -85,6 +89,9 @@ class Chrome(
             // back button
             add(DrawOutline(backRect, "dimgray", 1))
             add(DrawText(backRect.top, backRect.left + padding, "<", font, "black"))
+            // Forward button
+            add(DrawOutline(forwardRect, "dimgray", 1))
+            add(DrawText(forwardRect.top, forwardRect.left + padding, ">", font, "black"))
             // address bar
             add(DrawOutline(addressRect, "dimgray", 1))
             if (focus == FocusElement.AddressBar) {
@@ -101,7 +108,7 @@ class Chrome(
                     ),
                 )
             } else {
-                val url = if (browser.currentTab < browser.tabs.size) browser.tabs[browser.currentTab].url.toString() else ""
+                val url = currentTab?.url?.toString() ?: ""
                 add(DrawText(addressRect.top, addressRect.left + padding, url, font, "black"))
             }
         }
@@ -111,17 +118,19 @@ class Chrome(
         y: Int,
     ) {
         focus = FocusElement.None
-        if (newTabRect.contains(x, y)) {
-            browser.newTab("about:blank")
-        } else if (backRect.contains(x, y)) {
-            browser.tabs[browser.currentTab].goBack()
-        } else if (addressRect.contains(x, y)) {
-            focus = FocusElement.AddressBar
-            addressBar = ""
-        } else {
-            browser.tabs.forEachIndexed { index, _ ->
-                if (tabRect(index).contains(x, y)) {
-                    browser.currentTab = index
+        when {
+            newTabRect.contains(x, y) -> browser.newTab("about:blank")
+            backRect.contains(x, y) -> currentTab?.goBack()
+            forwardRect.contains(x, y) -> currentTab?.goForward()
+            addressRect.contains(x, y) -> {
+                focus = FocusElement.AddressBar
+                addressBar = ""
+            }
+            else -> {
+                browser.tabs.forEachIndexed { index, _ ->
+                    if (tabRect(index).contains(x, y)) {
+                        browser.currentTab = index
+                    }
                 }
             }
         }
@@ -148,7 +157,7 @@ class Chrome(
     }
 
     fun resized() {
-        addressRect = Rect(backRect.right + padding, urlBarTop + padding, browser.width - padding, urlBarBottom)
+        addressRect = Rect(forwardRect.right + padding, urlBarTop + padding, browser.width - padding, urlBarBottom)
     }
 
     enum class FocusElement {
