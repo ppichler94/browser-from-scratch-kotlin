@@ -101,7 +101,8 @@ class Chrome(
                     ),
                 )
             } else {
-                add(DrawText(addressRect.top, addressRect.left + padding, browser.tabs[browser.currentTab].url.toString(), font, "black"))
+                val url = if (browser.currentTab < browser.tabs.size) browser.tabs[browser.currentTab].url.toString() else ""
+                add(DrawText(addressRect.top, addressRect.left + padding, url, font, "black"))
             }
         }
 
@@ -136,6 +137,7 @@ class Chrome(
         if (focus == FocusElement.AddressBar) {
             browser.load(addressBar)
             addressBar = ""
+            focus = FocusElement.None
         }
     }
 

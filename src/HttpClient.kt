@@ -1,5 +1,6 @@
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.net.Socket
+import java.net.UnknownHostException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -25,6 +26,8 @@ data class Response(
         ) = Response(200, "OK", headers, body)
 
         fun badRequest(body: String) = Response(400, "Bad Request", mapOf(), body)
+
+        fun notFound(body: String) = Response(404, "Not Found", mapOf(), body)
     }
 }
 
@@ -75,10 +78,14 @@ class HttpClient {
 
         if (socket == null || socket?.isConnected != true || socket?.isClosed != false) {
             socket =
-                when (url.scheme) {
-                    "http" -> SocketFactory.getDefault().createSocket(url.host, url.port)
-                    "https" -> SSLSocketFactory.getDefault().createSocket(url.host, url.port)
-                    else -> throw Exception("Unknown scheme: ${url.scheme}")
+                try {
+                    when (url.scheme) {
+                        "http" -> SocketFactory.getDefault().createSocket(url.host, url.port)
+                        "https" -> SSLSocketFactory.getDefault().createSocket(url.host, url.port)
+                        else -> throw Exception("Unknown scheme: ${url.scheme}")
+                    }
+                } catch (_: UnknownHostException) {
+                    return Response.notFound("Unknown host.")
                 }
             origin = url.origin
         }

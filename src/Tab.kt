@@ -83,10 +83,6 @@ class Tab(
     }
 
     fun load(urlToLoad: String) {
-        if (urlToLoad == "about:blank") {
-            url = Url(urlToLoad)
-            return
-        }
         url =
             if (urlToLoad.startsWith("view-source:")) {
                 Url(urlToLoad.removePrefix("view-source:"))
@@ -103,8 +99,8 @@ class Tab(
     ) {
         this.url = url
         history.add(url)
-        val response = httpClient.get(url)
-        val parser = if (viewSource) ViewSourceHtmlParser(response.body) else HtmlParser(response.body)
+        val body = getContent(url)
+        val parser = if (viewSource) ViewSourceHtmlParser(body) else HtmlParser(body)
         root = parser.parse()
         val rules = mutableListOf<CssParser.CssRule>()
         rules.addAll(defaultStyleSheet)
@@ -130,6 +126,23 @@ class Tab(
         document.layout(width)
         displayList = mutableListOf()
         paintTree(document, displayList)
+    }
+
+    private fun getContent(url: Url): String {
+        when (url.scheme) {
+            "http", "https", "file" -> {
+                val response = httpClient.get(url)
+                if (response.status != 200) {
+                    return "<html>HTTP error: ${response.status}</html>"
+                }
+                return response.body
+            }
+            "about" if (url.path == "blank") -> {
+                return "<html></html>"
+            }
+        }
+
+        return "<html>Unknown protocol: ${url.scheme}</html>"
     }
 
     fun goBack() {
