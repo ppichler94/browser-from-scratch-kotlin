@@ -13,6 +13,8 @@ class Tab(
     private val httpClient = HttpClient()
     private val logger = KotlinLogging.logger {}
     private val history = mutableListOf<Url>()
+    var title: String = "Untitled"
+        private set
     var url = Url("about:blank")
         private set
     private val defaultStyleSheet =
@@ -113,7 +115,7 @@ class Tab(
             .mapNotNull {
                 try {
                     httpClient.get(it)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     logger.warn { "Failed to load stylesheet: $it" }
                     null
                 }
@@ -126,6 +128,15 @@ class Tab(
         document.layout(width)
         displayList = mutableListOf()
         paintTree(document, displayList)
+        title =
+            root!!
+                .treeToList()
+                .filterIsInstance<Element>()
+                .firstOrNull { it.tag == "title" }
+                ?.children
+                ?.firstOrNull()
+                ?.toString()
+                ?: "Untitled"
     }
 
     private fun getContent(url: Url): String {

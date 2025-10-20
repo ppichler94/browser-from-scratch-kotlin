@@ -12,7 +12,7 @@ fun main(args: Array<String>) {
     window.layout = BorderLayout()
 
     // Create canvas
-    val canvas = Browser()
+    val canvas = Browser(window)
     canvas.background = Color.WHITE
     window.add(canvas, BorderLayout.CENTER)
 

@@ -1,10 +1,13 @@
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.awt.Canvas
+import java.awt.Frame
 import java.awt.Graphics
 import java.awt.event.*
 import javax.swing.event.MouseInputAdapter
 
-class Browser : Canvas() {
+class Browser(
+    private val window: Frame,
+) : Canvas() {
     val tabs = mutableListOf<Tab>()
     var currentTab = 0
     private val logger = KotlinLogging.logger {}
@@ -41,6 +44,7 @@ class Browser : Canvas() {
                         }
                     }
                     repaint()
+                    updateTitle()
                 }
             },
         )
@@ -58,6 +62,7 @@ class Browser : Canvas() {
                 override fun keyPressed(e: KeyEvent) {
                     if (e.keyCode == KeyEvent.VK_ENTER) {
                         chrome.enter()
+                        updateTitle()
                     }
 
                     if (e.keyCode == KeyEvent.VK_BACK_SPACE) {
@@ -92,5 +97,12 @@ class Browser : Canvas() {
         tabs.add(newTab)
         currentTab = tabs.size - 1
         repaint()
+        updateTitle()
+    }
+
+    fun updateTitle() {
+        if (currentTab < tabs.size) {
+            window.title = tabs[currentTab].title
+        }
     }
 }
