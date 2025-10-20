@@ -87,11 +87,15 @@ class Chrome(
             }
 
             // back button
-            add(DrawOutline(backRect, "dimgray", 1))
-            add(DrawText(backRect.top, backRect.left + padding, "<", font, "black"))
+            val backBgColor = if (currentTab?.historyEmpty == true) "lightgray" else "dimgray"
+            val backColor = if (currentTab?.historyEmpty == true) "lightgray" else "black"
+            add(DrawOutline(backRect, backBgColor, 1))
+            add(DrawText(backRect.top, backRect.left + padding, "<", font, backColor))
             // Forward button
-            add(DrawOutline(forwardRect, "dimgray", 1))
-            add(DrawText(forwardRect.top, forwardRect.left + padding, ">", font, "black"))
+            val forwardBgColor = if (currentTab?.forwardHistoryEmpty == true) "lightgray" else "dimgray"
+            val forwardColor = if (currentTab?.forwardHistoryEmpty == true) "lightgray" else "black"
+            add(DrawOutline(forwardRect, forwardBgColor, 1))
+            add(DrawText(forwardRect.top, forwardRect.left + padding, ">", font, forwardColor))
             // address bar
             add(DrawOutline(addressRect, "dimgray", 1))
             if (focus == FocusElement.AddressBar) {

@@ -14,6 +14,8 @@ class Tab(
     private val logger = KotlinLogging.logger {}
     private val history = mutableListOf<Url>()
     private val forwardHistory = mutableListOf<Url>()
+    val historyEmpty get() = history.size <= 1
+    val forwardHistoryEmpty get() = forwardHistory.isEmpty()
     var title: String = "Untitled"
         private set
     var url = Url("about:blank")
