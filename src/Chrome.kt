@@ -19,51 +19,27 @@ class Chrome(
     private val font = Font("SansSerif", Font.PLAIN, 12)
     private val fontRenderContext = FontRenderContext(null, true, true)
     private val padding = 5
-    private val tabbarTop = 0
-    private val tabbarBottom: Int
-    private val newTabRect: Rect
     private var addressRect: Rect
     private var addressBar: String = ""
-    private val backRect: Rect
-    private val forwardRect: Rect
+    private val backButton: Button
+    private val forwardButton: Button
     private val urlBarTop: Int
     private val urlBarBottom: Int
     private var focus = FocusElement.None
+    private val tabBar = TabBar(0, 0, font)
     val bottom: Int
 
     private val currentTab: Tab? get() = browser.tabs.getOrNull(browser.currentTab)
 
     init {
         val fontHeight = font.getLineMetrics("Tab", fontRenderContext).height
-        tabbarBottom = (fontHeight + padding * 2).toInt()
-        val plusWidth = font.getStringBounds("+", fontRenderContext).width.toInt() + 2 * padding
-        newTabRect =
-            Rect(
-                padding,
-                padding,
-                padding + plusWidth,
-                padding + fontHeight.toInt(),
-            )
-
-        urlBarTop = tabbarBottom
+        urlBarTop = tabBar.bottom
         urlBarBottom = urlBarTop + 2 * padding + fontHeight.toInt()
-        val backWidth = font.getStringBounds("<", fontRenderContext).width.toInt() + 2 * padding
-        backRect = Rect(padding, urlBarTop + padding, padding + backWidth, urlBarBottom)
-        forwardRect = Rect(backRect.right + padding, urlBarTop + padding, backRect.right + padding + backWidth, urlBarBottom)
-        addressRect = Rect(forwardRect.right + padding, urlBarTop + padding, browser.width - padding, urlBarBottom)
+        backButton = Button(padding, urlBarTop + padding, "<", font)
+        forwardButton = Button(backButton.right + padding, urlBarTop + padding, ">", font)
+        addressRect = Rect(forwardButton.right + padding, urlBarTop + padding, browser.width - padding, urlBarBottom)
 
         bottom = urlBarBottom + padding
-    }
-
-    fun tabRect(index: Int): Rect {
-        val tabsStart = newTabRect.right + padding
-        val tabWidth = font.getStringBounds("Tab X", fontRenderContext).width.toInt()
-        return Rect(
-            tabsStart + (tabWidth + padding * 2) * index,
-            tabbarTop,
-            tabsStart + (tabWidth + padding * 2) * (index + 1),
-            tabbarBottom,
-        )
     }
 
     fun paint(): List<DrawCommand> =
@@ -71,31 +47,10 @@ class Chrome(
             add(DrawRect(0, 0, bottom, browser.width, "white"))
             add(DrawLine(0, bottom, browser.width, bottom, "gray", 1))
 
-            add(DrawOutline(newTabRect, "dimgray", 1))
-            add(DrawText(newTabRect.top, newTabRect.left + padding, "+", font, "black"))
+            addAll(tabBar.paint(browser.tabs.size, browser.currentTab, browser.width))
 
-            browser.tabs.forEachIndexed { index, _ ->
-                val rect = tabRect(index)
-                add(DrawLine(rect.left, 0, rect.left, rect.bottom, "gray", 1))
-                add(DrawLine(rect.right, 0, rect.right, rect.bottom, "gray", 1))
-                add(DrawText(rect.top + padding, rect.left + padding, "Tab ${index + 1}", font, "black"))
-
-                if (index == browser.currentTab) {
-                    add(DrawLine(0, rect.bottom, rect.left, rect.bottom, "gray", 1))
-                    add(DrawLine(rect.right, rect.bottom, browser.width, rect.bottom, "gray", 1))
-                }
-            }
-
-            // back button
-            val backBgColor = if (currentTab?.historyEmpty == true) "lightgray" else "dimgray"
-            val backColor = if (currentTab?.historyEmpty == true) "lightgray" else "black"
-            add(DrawOutline(backRect, backBgColor, 1))
-            add(DrawText(backRect.top, backRect.left + padding, "<", font, backColor))
-            // Forward button
-            val forwardBgColor = if (currentTab?.forwardHistoryEmpty == true) "lightgray" else "dimgray"
-            val forwardColor = if (currentTab?.forwardHistoryEmpty == true) "lightgray" else "black"
-            add(DrawOutline(forwardRect, forwardBgColor, 1))
-            add(DrawText(forwardRect.top, forwardRect.left + padding, ">", font, forwardColor))
+            addAll(backButton.paint(currentTab?.historyEmpty == false))
+            addAll(forwardButton.paint(currentTab?.forwardHistoryEmpty == false))
             // address bar
             add(DrawOutline(addressRect, "dimgray", 1))
             if (focus == FocusElement.AddressBar) {
@@ -122,20 +77,17 @@ class Chrome(
         y: Int,
     ) {
         focus = FocusElement.None
+        when (val tabEvent = tabBar.click(x, y, browser.tabs.size)) {
+            is TabBar.TabSelected -> browser.currentTab = tabEvent.index
+            is TabBar.NewTab -> browser.newTab("about:blank")
+            null -> {}
+        }
         when {
-            newTabRect.contains(x, y) -> browser.newTab("about:blank")
-            backRect.contains(x, y) -> currentTab?.goBack()
-            forwardRect.contains(x, y) -> currentTab?.goForward()
+            backButton.contains(x, y) -> currentTab?.goBack()
+            forwardButton.contains(x, y) -> currentTab?.goForward()
             addressRect.contains(x, y) -> {
                 focus = FocusElement.AddressBar
                 addressBar = ""
-            }
-            else -> {
-                browser.tabs.forEachIndexed { index, _ ->
-                    if (tabRect(index).contains(x, y)) {
-                        browser.currentTab = index
-                    }
-                }
             }
         }
     }
@@ -161,11 +113,117 @@ class Chrome(
     }
 
     fun resized() {
-        addressRect = Rect(forwardRect.right + padding, urlBarTop + padding, browser.width - padding, urlBarBottom)
+        addressRect = Rect(forwardButton.right + padding, urlBarTop + padding, browser.width - padding, urlBarBottom)
     }
 
     enum class FocusElement {
         AddressBar,
         None,
     }
+}
+
+class TabBar(
+    private val x: Int,
+    private val y: Int,
+    private val font: Font,
+) {
+    private val padding = 5
+    val bottom: Int
+    private val fontRenderContext = FontRenderContext(null, true, true)
+    private val newTabButton = Button(x + padding, y + padding, "+", font)
+
+    init {
+        val fontHeight = font.getLineMetrics("Tab", fontRenderContext).height
+        bottom = (fontHeight + padding * 2).toInt()
+    }
+
+    private fun tabRect(index: Int): Rect {
+        val tabsStart = newTabButton.right + padding
+        val tabWidth = font.getStringBounds("Tab X", fontRenderContext).width.toInt()
+        return Rect(
+            tabsStart + (tabWidth + padding * 2) * index,
+            y,
+            tabsStart + (tabWidth + padding * 2) * (index + 1),
+            bottom,
+        )
+    }
+
+    fun paint(
+        numTabs: Int,
+        currentTab: Int,
+        browserWidth: Int,
+    ): List<DrawCommand> =
+        buildList {
+            addAll(newTabButton.paint(true))
+
+            (0 until numTabs).forEach { index ->
+                val rect = tabRect(index)
+                add(DrawLine(rect.left, 0, rect.left, rect.bottom, "gray", 1))
+                add(DrawLine(rect.right, 0, rect.right, rect.bottom, "gray", 1))
+                add(DrawText(rect.top + padding, rect.left + padding, "Tab ${index + 1}", font, "black"))
+
+                if (index == currentTab) {
+                    add(DrawLine(0, rect.bottom, rect.left, rect.bottom, "gray", 1))
+                    add(DrawLine(rect.right, rect.bottom, browserWidth, rect.bottom, "gray", 1))
+                }
+            }
+        }
+
+    fun click(
+        x: Int,
+        y: Int,
+        numTabs: Int,
+    ): Event? {
+        when {
+            newTabButton.contains(x, y) -> return NewTab()
+            else -> {
+                (0 until numTabs).forEach { index ->
+                    if (tabRect(index).contains(x, y)) {
+                        return TabSelected(index)
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    sealed interface Event
+
+    data class TabSelected(
+        val index: Int,
+    ) : Event
+
+    class NewTab : Event
+}
+
+class Button(
+    x: Int,
+    y: Int,
+    private val text: String,
+    private val font: Font,
+) {
+    private val rect: Rect
+    private val padding = 5
+    private val fontRenderContext = FontRenderContext(null, true, true)
+    val right: Int get() = rect.right
+    val bottom: Int get() = rect.bottom
+
+    init {
+        val fontHeight = font.getLineMetrics("Tab", fontRenderContext).height.toInt()
+        val textWidth = font.getStringBounds(text, fontRenderContext).width.toInt() + 2 * padding
+        rect = Rect(x, y, x + textWidth, y + fontHeight + padding)
+    }
+
+    fun paint(enabled: Boolean): List<DrawCommand> =
+        buildList {
+            val backBgColor = if (!enabled) "lightgray" else "dimgray"
+            val backColor = if (!enabled) "lightgray" else "black"
+            add(DrawOutline(rect, backBgColor, 1))
+            add(DrawText(rect.top, rect.left + padding, text, font, backColor))
+        }
+
+    fun contains(
+        x: Int,
+        y: Int,
+    ) = this.rect.contains(x, y)
 }
