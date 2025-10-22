@@ -116,23 +116,24 @@ open class BlockLayout(
             }
 
         val mode = layoutMode()
+        var previous: Layout? = null
         when (mode) {
             LayoutMode.BLOCK -> {
-                var previous: Layout? = null
                 groupInlineElements().forEach {
                     val next =
-                        if (it.size > 1) {
-                            AnonymousBlockBoxLayout(it, this, previous)
+                        if (it.first == LayoutMode.INLINE) {
+                            AnonymousBlockBoxLayout(it.second, this, previous)
                         } else {
-                            BlockLayout(it.first(), this, previous)
+                            BlockLayout(it.second.first(), this, previous)
                         }
                     children.add(next)
                     previous = next
                 }
             }
             LayoutMode.INLINE -> {
-                newLine(node)
-                recurse(node)
+                val next = AnonymousBlockBoxLayout(listOf(node), this, previous)
+                children.add(next)
+                previous = next
             }
         }
 
@@ -141,22 +142,22 @@ open class BlockLayout(
         height = children.sumOf { it.height }
     }
 
-    private fun groupInlineElements(): List<List<Node>> {
-        val result = mutableListOf<List<Node>>()
+    private fun groupInlineElements(): List<Pair<LayoutMode, List<Node>>> {
+        val result = mutableListOf<Pair<LayoutMode, List<Node>>>()
         var current = mutableListOf<Node>()
         node.children.forEach {
             if (it is Element && it.tag in BLOCK_ELEMENTS) {
                 if (current.isNotEmpty()) {
-                    result.add(current)
+                    result.add(LayoutMode.INLINE to current)
                 }
-                result.add(listOf(it))
+                result.add(LayoutMode.BLOCK to listOf(it))
                 current = mutableListOf()
             } else {
                 current.add(it)
             }
         }
         if (current.isNotEmpty()) {
-            result.add(current)
+            result.add(LayoutMode.INLINE to current)
         }
         return result
     }
@@ -172,54 +173,6 @@ open class BlockLayout(
             return LayoutMode.INLINE
         }
         return LayoutMode.BLOCK
-    }
-
-    fun recurse(node: Node) {
-        if (node is Text) {
-            text(node)
-        } else if (node is Element) {
-            if (node.tag == "br") {
-                newLine(node)
-            }
-            node.children.forEach { recurse(it) }
-        }
-    }
-
-    fun text(node: Text) {
-        var style = 0
-        if (node.style["font-weight"] == "bold") {
-            style += Font.BOLD
-        }
-        if (node.style["font-style"] == "italic") {
-            style += Font.ITALIC
-        }
-        val size = node.style["font-size"]?.removeSuffix("px")?.toIntOrNull() ?: 12
-        val fontName = node.style["font-family"] ?: "SansSerif"
-        val font = Font(fontName, style, size)
-        node.content.split("\\s+".toRegex()).forEach { word(it, font, node) }
-    }
-
-    fun word(
-        word: String,
-        font: Font,
-        node: Text,
-    ) {
-        val width = font.getStringBounds(word, fontRenderContext).width.toInt()
-        if (cursorX + width > this.width) {
-            newLine(node)
-        }
-        val line = children.last()
-        val previousWord = line.children.lastOrNull() as TextLayout?
-        val text = TextLayout(word, node, line, previousWord)
-        line.children.add(text)
-        cursorX += width + font.getStringBounds(" ", fontRenderContext).width.toInt()
-    }
-
-    fun newLine(node: Node) {
-        cursorX = 0
-        val lastLine = children.lastOrNull()
-        val newLine = LineLayout(node, this, lastLine)
-        children.add(newLine)
     }
 
     override fun paint(): List<DrawCommand> =
@@ -303,6 +256,54 @@ class AnonymousBlockBoxLayout(
 
         children.forEach { it.layout(width) }
         height = children.sumOf { it.height }
+    }
+
+    private fun recurse(node: Node) {
+        if (node is Text) {
+            text(node)
+        } else if (node is Element) {
+            if (node.tag == "br") {
+                newLine(node)
+            }
+            node.children.forEach { recurse(it) }
+        }
+    }
+
+    private fun text(node: Text) {
+        var style = 0
+        if (node.style["font-weight"] == "bold") {
+            style += Font.BOLD
+        }
+        if (node.style["font-style"] == "italic") {
+            style += Font.ITALIC
+        }
+        val size = node.style["font-size"]?.removeSuffix("px")?.toIntOrNull() ?: 12
+        val fontName = node.style["font-family"] ?: "SansSerif"
+        val font = Font(fontName, style, size)
+        node.content.split("\\s+".toRegex()).forEach { word(it, font, node) }
+    }
+
+    private fun word(
+        word: String,
+        font: Font,
+        node: Text,
+    ) {
+        val width = font.getStringBounds(word, fontRenderContext).width.toInt()
+        if (cursorX + width > this.width) {
+            newLine(node)
+        }
+        val line = children.last()
+        val previousWord = line.children.lastOrNull() as TextLayout?
+        val text = TextLayout(word, node, line, previousWord)
+        line.children.add(text)
+        cursorX += width + font.getStringBounds(" ", fontRenderContext).width.toInt()
+    }
+
+    private fun newLine(node: Node) {
+        cursorX = 0
+        val lastLine = children.lastOrNull()
+        val newLine = LineLayout(node, this, lastLine)
+        children.add(newLine)
     }
 
     override fun paint(): List<DrawCommand> = listOf()
