@@ -28,6 +28,10 @@ open class BlockLayout(
                 parent?.y ?: 0
             }
 
+        if (node is Element && (node as Element).tag == "li") {
+            x += 12
+        }
+
         val mode = layoutMode()
         var previous: Layout? = null
         when (mode) {
@@ -97,7 +101,7 @@ open class BlockLayout(
                 add(DrawRect(y, x, y2, x2, bgcolor))
             }
             if (node is Element && (node as Element).tag == "li") {
-                add(DrawRect(y + 6, x + 2, y + 14, x + 8, "lightgray"))
+                add(DrawRect(y + 6, x - 10, y + 14, x - 2, "lightgray"))
             }
         }
 

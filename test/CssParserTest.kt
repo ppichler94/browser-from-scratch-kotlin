@@ -75,6 +75,20 @@ class CssParserTest {
     }
 
     @Test
+    fun `selector() parses a class selector`() {
+        val parser = CssParser(".editor-note")
+        val selector = parser.selector()
+        assertThat(selector).isEqualTo(ClassSelector("editor-note"))
+    }
+
+    @Test
+    fun `selector() parses sequence of selectors`() {
+        val parser = CssParser("div.spacious.elegant")
+        val selector = parser.selector()
+        assertThat(selector).isEqualTo(SequenceSelector(listOf(TagSelector("div"), ClassSelector("spacious"), ClassSelector("elegant"))))
+    }
+
+    @Test
     fun `parse() parses a CSS rule`() {
         val parser = CssParser("div { width: 100px; color: red; }")
         val rules = parser.parse()

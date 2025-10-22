@@ -32,3 +32,19 @@ data class DescendantSelector(
         return false
     }
 }
+
+data class ClassSelector(
+    val className: String,
+) : Selector {
+    override fun matches(node: Node): Boolean = node is Element && node.attributes["class"]?.split(" ")?.contains(className) == true
+
+    override val specificity: Int = 2
+}
+
+data class SequenceSelector(
+    val selectors: List<Selector>,
+) : Selector {
+    override fun matches(node: Node): Boolean = selectors.all { it.matches(node) }
+
+    override val specificity: Int = selectors.sumOf { it.specificity }
+}

@@ -100,16 +100,28 @@ class CssParser(
         }
 
     fun selector(): Selector {
-        var out: Selector = TagSelector(word().lowercase())
+        var out: Selector = selector(word().lowercase())
         whitespace()
         while (index < input.length && input[index] != '{') {
             val tag = word().lowercase()
-            val descendant = TagSelector(tag)
+            val descendant = selector(tag)
             out = DescendantSelector(out, descendant)
             whitespace()
         }
         return out
     }
+
+    private fun selector(name: String): Selector =
+        when {
+            name.startsWith(".") -> ClassSelector(name.substring(1))
+            name.contains(".") -> {
+                val names = name.split(".")
+                val tag = TagSelector(names[0])
+                val classes = names.drop(1).map { ClassSelector(it) }
+                SequenceSelector(listOf(tag) + classes)
+            }
+            else -> TagSelector(name)
+        }
 
     fun parse(): List<CssRule> =
         buildList {
