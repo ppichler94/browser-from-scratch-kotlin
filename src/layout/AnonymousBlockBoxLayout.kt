@@ -4,6 +4,7 @@ import DrawCommand
 import Element
 import Node
 import Text
+import layout.InputLayout.Companion.INPUT_WIDTH
 import java.awt.Font
 
 class AnonymousBlockBoxLayout(
@@ -35,22 +36,30 @@ class AnonymousBlockBoxLayout(
                 if (node.tag == "br") {
                     newLine(node)
                 }
+                if (node.tag == "input" || node.tag == "button") {
+                    input(node)
+                }
                 node.children.forEach { recurse(it) }
             }
         }
     }
 
+    private fun input(node: Element) {
+        val w = INPUT_WIDTH
+        if (cursorX + w > width) {
+            newLine(node)
+        }
+        val line = children.last()
+        val previousWord = line.children.lastOrNull()
+        val input = InputLayout(node, line, previousWord)
+        line.children.add(input)
+
+        val font = getFont(node.style)
+        cursorX += w + font.getStringBounds(" ", fontRenderContext).width.toInt()
+    }
+
     private fun text(node: Text) {
-        var style = 0
-        if (node.style["font-weight"] == "bold") {
-            style += Font.BOLD
-        }
-        if (node.style["font-style"] == "italic") {
-            style += Font.ITALIC
-        }
-        val size = node.style["font-size"]?.removeSuffix("px")?.toIntOrNull() ?: 12
-        val fontName = node.style["font-family"] ?: "SansSerif"
-        val font = Font(fontName, style, size)
+        val font = getFont(node.style)
         node.content.split("\\s+".toRegex()).forEach { word(it, font, node) }
     }
 
@@ -64,7 +73,7 @@ class AnonymousBlockBoxLayout(
             newLine(node)
         }
         val line = children.last()
-        val previousWord = line.children.lastOrNull() as TextLayout?
+        val previousWord = line.children.lastOrNull() as? TextLayout
         val text = TextLayout(word, node, line, previousWord)
         line.children.add(text)
         cursorX += width + font.getStringBounds(" ", fontRenderContext).width.toInt()

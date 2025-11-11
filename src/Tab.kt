@@ -1,8 +1,5 @@
 import io.github.oshai.kotlinlogging.KotlinLogging
-import layout.BlockLayout
-import layout.DocumentLayout
-import layout.paintTree
-import layout.treeToList
+import layout.*
 import java.awt.Color
 import java.awt.Graphics
 
@@ -137,6 +134,7 @@ class Tab(
         HtmlParser.style(root!!, rules)
         document = DocumentLayout(root!!)
         document.layout(width)
+        printTree(document)
         displayList = mutableListOf()
         paintTree(document, displayList)
         title =

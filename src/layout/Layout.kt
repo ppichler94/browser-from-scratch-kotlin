@@ -2,6 +2,7 @@ package layout
 
 import DrawCommand
 import Node
+import java.awt.Font
 
 abstract class Layout {
     val children: MutableList<Layout> = mutableListOf()
@@ -44,4 +45,17 @@ fun Layout.treeToList(): List<Layout> {
     result.add(this)
     children.forEach { result.addAll(it.treeToList()) }
     return result
+}
+
+fun getFont(style: Map<String, String>): Font {
+    var s = 0
+    if (style["font-weight"] == "bold") {
+        s += Font.BOLD
+    }
+    if (style["font-style"] == "italic") {
+        s += Font.ITALIC
+    }
+    val size = style["font-size"]?.removeSuffix("px")?.toIntOrNull() ?: 12
+    val fontName = style["font-family"] ?: "SansSerif"
+    return Font(fontName, s, size)
 }

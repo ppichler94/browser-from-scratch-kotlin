@@ -86,7 +86,7 @@ open class BlockLayout(
         if (node.children.any { it is Element && it.tag in BLOCK_ELEMENTS }) {
             return LayoutMode.BLOCK
         }
-        if (node.children.isNotEmpty()) {
+        if (node.children.isNotEmpty() || (node as Element).tag == "input") {
             return LayoutMode.INLINE
         }
         return LayoutMode.BLOCK
