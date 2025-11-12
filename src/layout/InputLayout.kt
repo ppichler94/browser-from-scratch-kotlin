@@ -1,6 +1,7 @@
 package layout
 
 import DrawCommand
+import DrawLine
 import DrawRect
 import DrawText
 import Element
@@ -45,8 +46,15 @@ class InputLayout(
                 add(DrawRect(y, x, y + height, x + width, bgcolor))
             }
 
+            val text = text()
+
+            if (node.isFocused) {
+                val cx = x + font.getStringBounds(text, fontRenderContext).width.toInt()
+                add(DrawLine(cx, y, cx, y + height, "black", 1))
+            }
+
             val color = node.style["color"] ?: "black"
-            add(DrawText(y, x, text(), font, color))
+            add(DrawText(y, x, text, font, color))
         }
 
     private fun text(): String =

@@ -116,6 +116,10 @@ class Chrome(
         addressRect = Rect(forwardButton.right + padding, urlBarTop + padding, browser.width - padding, urlBarBottom)
     }
 
+    fun blur() {
+        focus = FocusElement.None
+    }
+
     enum class FocusElement {
         AddressBar,
         None,

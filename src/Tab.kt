@@ -2,6 +2,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import layout.*
 import java.awt.Color
 import java.awt.Graphics
+import java.net.URLEncoder
 
 class Tab(
     private var width: Int,
@@ -28,11 +29,18 @@ class Tab(
                 ?.reader()
                 ?.readText() ?: "",
         ).parse()
+    private var rules = mutableListOf<CssParser.CssRule>()
+    private var focus: Element? = null
 
     fun click(
         x: Int,
         y: Int,
     ) {
+        if (focus != null) {
+            focus!!.isFocused = false
+            focus = null
+            render()
+        }
         val y = y + scroll
         val objects =
             document
@@ -47,10 +55,23 @@ class Tab(
                 val url = url.resolve(element.attributes["href"]!!)
                 load(url)
                 return
+            } else if (element is Element && element.tag == "input") {
+                focus = element
+                focus!!.isFocused = true
+                element.attributes["value"] = ""
+            } else if (element is Element && element.tag == "button") {
+                while (element != null) {
+                    if (element is Element && element.tag == "form" && "action" in element.attributes) {
+                        submitForm(element)
+                        return
+                    }
+                    element = element.parent
+                }
             }
 
-            element = element.parent
+            element = element!!.parent
         }
+        render()
     }
 
     fun scroll(rotation: Int) {
@@ -89,6 +110,7 @@ class Tab(
     }
 
     fun load(urlToLoad: String) {
+        forwardHistory.clear()
         url =
             if (urlToLoad.startsWith("view-source:")) {
                 Url(urlToLoad.removePrefix("view-source:"))
@@ -96,23 +118,24 @@ class Tab(
                 Url(urlToLoad)
             }
         val viewSource = urlToLoad.startsWith("view-source")
-        load(url, viewSource)
+        doLoad(viewSource)
     }
 
-    fun load(
-        url: Url,
+    fun load(urlToLoad: Url) {
+        forwardHistory.clear()
+        url = urlToLoad
+        doLoad(false)
+    }
+
+    fun doLoad(
         viewSource: Boolean = false,
-        clearForwardHistory: Boolean = true,
+        body: String? = null,
     ) {
-        if (clearForwardHistory) {
-            forwardHistory.clear()
-        }
-        this.url = url
         history.add(url)
-        val body = getContent(url)
-        val parser = if (viewSource) ViewSourceHtmlParser(body) else HtmlParser(body)
+        val responseBody = getContent(url, body)
+        val parser = if (viewSource) ViewSourceHtmlParser(responseBody) else HtmlParser(responseBody)
         root = parser.parse()
-        val rules = mutableListOf<CssParser.CssRule>()
+        rules = mutableListOf()
         rules.addAll(defaultStyleSheet)
         root!!
             .treeToList()
@@ -131,12 +154,6 @@ class Tab(
                 rules.addAll(CssParser(it.body).parse())
             }
         rules.sortBy { it.first.specificity }
-        HtmlParser.style(root!!, rules)
-        document = DocumentLayout(root!!)
-        document.layout(width)
-        printTree(document)
-        displayList = mutableListOf()
-        paintTree(document, displayList)
         title =
             root!!
                 .treeToList()
@@ -146,14 +163,35 @@ class Tab(
                 ?.firstOrNull()
                 ?.toString()
                 ?: "Untitled"
+        render()
     }
 
-    private fun getContent(url: Url): String {
+    private fun render() {
+        HtmlParser.style(root!!, rules)
+        document = DocumentLayout(root!!)
+        document.layout(width)
+        displayList = mutableListOf()
+        paintTree(document, displayList)
+    }
+
+    private fun getContent(
+        url: Url,
+        body: String?,
+    ): String {
         when (url.scheme) {
             "http", "https", "file" -> {
-                val response = httpClient.get(url)
+                val response =
+                    if (body != null) {
+                        httpClient.post(url, mapOf("Content-Type" to "application/x-www-form-urlencoded"), body)
+                    } else {
+                        httpClient.get(url)
+                    }
                 if (response.status != 200) {
-                    return "<html>HTTP error: ${response.status}</html>"
+                    return """<html>
+                        <p>HTTP error: ${response.status}</p>
+                        <p>${response.body}</p>
+                        </html>
+                        """.trimMargin()
                 }
                 return response.body
             }
@@ -171,14 +209,23 @@ class Tab(
         }
         val current = history.removeLast()
         forwardHistory.add(current)
-        load(history.removeLast(), false, false)
+        url = history.removeLast()
+        doLoad()
     }
 
     fun goForward() {
         if (forwardHistory.isEmpty()) {
             return
         }
-        load(forwardHistory.removeLast())
+        url = forwardHistory.removeLast()
+        doLoad()
+    }
+
+    fun keyPress(char: Char) {
+        if (focus != null) {
+            focus!!.attributes["value"] += char
+            render()
+        }
     }
 
     private fun drawScrollbar(
@@ -193,5 +240,21 @@ class Tab(
         val scrollbarY = scroll / document.height.toDouble() * height + offset
         g.color = Color(105, 105, 105)
         g.fillRect(width - 12, scrollbarY.toInt(), 8, scrollbarHeight)
+    }
+
+    private fun submitForm(form: Element) {
+        val inputs =
+            form
+                .treeToList()
+                .filter { it is Element && it.tag == "input" && "name" in it.attributes }
+                .map { it as Element }
+        val body =
+            inputs.joinToString("&") {
+                val name = URLEncoder.encode(it.attributes["name"]!!, "UTF-8")
+                val value = URLEncoder.encode(it.attributes["value"] ?: "", "UTF-8")
+                "$name=$value"
+            }
+        url = url.resolve(form.attributes["action"]!!)
+        doLoad(false, body)
     }
 }

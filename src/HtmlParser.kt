@@ -4,6 +4,7 @@ sealed class Node {
     abstract val children: MutableList<Node>
     val style = mutableMapOf<String, String>()
     abstract val parent: Node?
+    var isFocused: Boolean = false
 }
 
 fun Node.treeToList(): List<Node> = children.flatMap { it.treeToList() } + listOf(this)
@@ -19,7 +20,7 @@ data class Text(
 data class Element(
     val tag: String,
     override val parent: Node? = null,
-    val attributes: Map<String, String> = mapOf(),
+    val attributes: MutableMap<String, String> = mutableMapOf(),
     override val children: MutableList<Node> = mutableListOf(),
 ) : Node() {
     override fun toString() = "<$tag $attributes>"
@@ -123,11 +124,11 @@ open class HtmlParser(
             parent.children.add(node)
         } else if (tag in selfClosingTags) {
             val parent = unfinished.last()
-            val node = Element(tag, parent, attrs)
+            val node = Element(tag, parent, attrs.toMutableMap())
             parent.children.add(node)
         } else {
             val parent = unfinished.lastOrNull()
-            val node = Element(tag, parent, attrs)
+            val node = Element(tag, parent, attrs.toMutableMap())
             unfinished.add(node)
         }
     }
@@ -208,7 +209,7 @@ class ViewSourceHtmlParser(
         if (text.isBlank()) {
             return
         }
-        val element = Element("b", root, mapOf(), mutableListOf(Text(text)))
+        val element = Element("b", root, mutableMapOf(), mutableListOf(Text(text)))
         root.children.add(element)
     }
 

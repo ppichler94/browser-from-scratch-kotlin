@@ -40,34 +40,60 @@ class HttpClient {
     fun get(
         url: String,
         headers: Map<String, String> = mapOf(),
-        redirectCount: Int = 0,
-    ) = get(Url(url), headers, redirectCount)
+    ) = get(Url(url), headers)
 
     fun get(
         url: Url,
         headers: Map<String, String> = mapOf(),
+    ): Response {
+        logger.info { "GET $url" }
+        return request(url, headers, "GET", null)
+    }
+
+    fun post(
+        url: String,
+        headers: Map<String, String> = mapOf(),
+        body: String,
+    ) = post(Url(url), headers, body)
+
+    fun post(
+        url: Url,
+        headers: Map<String, String> = mapOf("Content-Type" to "application/x-www-form-urlencoded"),
+        body: String,
+    ): Response {
+        logger.info { "POST $url" }
+        return request(url, headers, "POST", body)
+    }
+
+    fun request(
+        url: Url,
+        headers: Map<String, String> = mapOf(),
+        method: String,
+        body: String? = null,
         redirectCount: Int = 0,
     ): Response {
         if (redirectCount > 10) {
             return Response.badRequest("Too many redirects.")
         }
-        logger.info { "GET $url" }
+        logger.info { "$method request to $url" }
 
         return when (url.scheme) {
-            "http" -> getHttp(url, headers, redirectCount)
-            "https" -> getHttp(url, headers, redirectCount)
+            "http" -> httpRequest(url, headers, method, body, redirectCount)
+            "https" -> httpRequest(url, headers, method, body, redirectCount)
             "file" -> getFile(url)
             "data" -> getData(url)
             else -> throw Exception("Unknown scheme: ${url.scheme}")
         }
     }
 
-    private fun getHttp(
+    private fun httpRequest(
         url: Url,
         headers: Map<String, String>,
+        method: String,
+        body: String? = null,
         redirectCount: Int,
     ): Response {
-        if (url in cache && Instant.now().isBefore(cache[url]!!.first)) {
+        if (body == null && url in cache && Instant.now().isBefore(cache[url]!!.first)) {
             return cache[url]!!.second
         }
 
@@ -90,31 +116,48 @@ class HttpClient {
             origin = url.origin
         }
 
-        var request = "GET ${url.path} HTTP/1.1\r\n"
+        var request = "$method ${url.path} HTTP/1.1\r\n"
         request += "Host: ${url.host}\r\n"
         request += "Connection: keep-alive\r\n"
         request += "User-Agent: MyBrowser/0.0\r\n"
+
+        if (body != null) {
+            val length = body.encodeToByteArray().size
+            request += "Content-Length: $length\r\n"
+        }
+
         headers.forEach { (key, value) ->
             request += "$key: $value\r\n"
         }
         request += "\r\n"
 
-        logger.debug { "Send request to $url" }
-        socket!!.getOutputStream().write(request.toByteArray())
-        val response = parseResponse(socket!!.getInputStream())
-        if (response.status in 300..<400) {
-            val location = response.headers["location"] ?: return Response.badRequest("Missing location header.")
-            val nextUrl =
-                if (location.startsWith("/")) {
-                    url.copy(path = location)
-                } else {
-                    Url(location)
-                }
-            return get(nextUrl, headers, redirectCount + 1)
+        if (body != null) {
+            request += body
         }
-        cacheResponse(url, response)
-        logger.info { "Received response: $response" }
-        return response
+
+        logger.debug { "Send request to $url" }
+
+        try {
+            socket!!.getOutputStream().write(request.toByteArray())
+            val response = parseResponse(socket!!.getInputStream())
+            if (response.status in 300..<400) {
+                val location = response.headers["location"] ?: return Response.badRequest("Missing location header.")
+                val nextUrl =
+                    if (location.startsWith("/")) {
+                        url.copy(path = location)
+                    } else {
+                        Url(location)
+                    }
+                return request(nextUrl, headers, method, body, redirectCount + 1)
+            }
+            cacheResponse(url, response)
+            logger.info { "Received response: $response" }
+            return response
+        } catch (e: Exception) {
+            socket?.close()
+            socket = null
+            return Response.badRequest("Failed to connect to server: ${e.message}")
+        }
     }
 
     private fun parseResponse(inputStream: java.io.InputStream): Response {

@@ -12,6 +12,7 @@ class Browser(
     var currentTab = 0
     private val logger = KotlinLogging.logger {}
     private val chrome = Chrome(this)
+    private var focus = FocusElement.None
 
     init {
         addComponentListener(
@@ -38,8 +39,11 @@ class Browser(
                 override fun mouseClicked(e: MouseEvent) {
                     if (e.button == MouseEvent.BUTTON1) {
                         if (e.y < chrome.bottom) {
+                            focus = FocusElement.None
                             chrome.click(e.x, e.y)
                         } else {
+                            focus = FocusElement.Content
+                            chrome.blur()
                             tabs[currentTab].click(e.x, e.y - chrome.bottom)
                         }
                     }
@@ -52,11 +56,16 @@ class Browser(
         addKeyListener(
             object : KeyAdapter() {
                 override fun keyTyped(e: KeyEvent) {
-                    if (e.keyChar in 0x20.toChar()..0x7F.toChar()) {
-                        chrome.keyPress(e.keyChar)
+                    if (e.keyChar !in 0x20.toChar()..0x7F.toChar()) {
+                        return
                     }
-
-                    repaint()
+                    if (focus == FocusElement.Content) {
+                        tabs[currentTab].keyPress(e.keyChar)
+                        repaint()
+                    } else if (focus == FocusElement.None) {
+                        chrome.keyPress(e.keyChar)
+                        repaint()
+                    }
                 }
 
                 override fun keyPressed(e: KeyEvent) {
@@ -104,5 +113,10 @@ class Browser(
         if (currentTab < tabs.size) {
             window.title = tabs[currentTab].title
         }
+    }
+
+    enum class FocusElement {
+        None,
+        Content,
     }
 }
