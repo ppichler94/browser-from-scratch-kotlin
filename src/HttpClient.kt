@@ -13,21 +13,72 @@ data class Response(
     val reason: String,
     val headers: Map<String, String>,
     val body: String,
+    val method: String,
+    val url: Url,
 ) {
-    override fun toString(): String {
-        val headers = headers.entries.joinToString("\n") { (key, value) -> "$key: $value" }
-        return "HTTP/1.1 $status $reason\n$headers\n\nBody length: ${body.length}"
-    }
+    override fun toString(): String = "v $method ${url.path} HTTP/1.1 $status ${body.encodeToByteArray().size}"
 
     companion object {
         fun ok(
             body: String,
             headers: Map<String, String> = mapOf(),
-        ) = Response(200, "OK", headers, body)
+            url: Url,
+        ) = Response(200, "OK", headers, body, "GET", url)
 
-        fun badRequest(body: String) = Response(400, "Bad Request", mapOf(), body)
+        fun badRequest(
+            body: String,
+            url: Url,
+        ) = Response(400, "Bad Request", mapOf(), body, "GET", url)
 
-        fun notFound(body: String) = Response(404, "Not Found", mapOf(), body)
+        fun notFound(
+            body: String,
+            url: Url,
+        ) = Response(404, "Not Found", mapOf(), body, "GET", url)
+    }
+}
+
+data class Request(
+    val method: String,
+    val url: Url,
+    val headers: Map<String, String>,
+    val body: String?,
+) {
+    fun encode(): String {
+        val defaultHeaders =
+            buildMap {
+                put("Host", url.host)
+                put("Connection", "keep-alive")
+                put("User-Agent", "MyBrowser/0.0")
+                if (body != null) {
+                    put("Content-Length", body.encodeToByteArray().size.toString())
+                }
+            }
+        val headersString =
+            defaultHeaders
+                .plus(headers)
+                .map { "${it.key}: ${it.value}" }
+                .joinToString("\r\n", postfix = "\r\n")
+        return "$method ${url.path} HTTP/1.1\r\n$headersString\r\n${body ?: ""}"
+    }
+
+    override fun toString(): String = "^ $method ${url.path} HTTP/1.1 ${body?.encodeToByteArray()?.size ?: 0}"
+
+    companion object {
+        fun get(
+            url: Url,
+            headers: Map<String, String> = mapOf(),
+        ) = Request("GET", url, headers, null)
+
+        fun post(
+            url: Url,
+            headers: Map<String, String> = mapOf("Content-Type" to "application/x-www-form-urlencoded"),
+            body: String,
+        ) = Request(
+            "POST",
+            url,
+            headers,
+            body,
+        )
     }
 }
 
@@ -45,59 +96,41 @@ class HttpClient {
     fun get(
         url: Url,
         headers: Map<String, String> = mapOf(),
-    ): Response {
-        logger.info { "GET $url" }
-        return request(url, headers, "GET", null)
-    }
-
-    fun post(
-        url: String,
-        headers: Map<String, String> = mapOf(),
-        body: String,
-    ) = post(Url(url), headers, body)
+    ): Response = request(Request.get(url, headers))
 
     fun post(
         url: Url,
-        headers: Map<String, String> = mapOf("Content-Type" to "application/x-www-form-urlencoded"),
+        headers: Map<String, String>,
         body: String,
-    ): Response {
-        logger.info { "POST $url" }
-        return request(url, headers, "POST", body)
-    }
+    ): Response = request(Request.post(url, headers, body))
 
     fun request(
-        url: Url,
-        headers: Map<String, String> = mapOf(),
-        method: String,
-        body: String? = null,
+        request: Request,
         redirectCount: Int = 0,
     ): Response {
         if (redirectCount > 10) {
-            return Response.badRequest("Too many redirects.")
+            return Response.badRequest("Too many redirects.", request.url)
         }
-        logger.info { "$method request to $url" }
+        logger.info { request.toString() }
 
-        return when (url.scheme) {
-            "http" -> httpRequest(url, headers, method, body, redirectCount)
-            "https" -> httpRequest(url, headers, method, body, redirectCount)
-            "file" -> getFile(url)
-            "data" -> getData(url)
-            else -> throw Exception("Unknown scheme: ${url.scheme}")
+        return when (request.url.scheme) {
+            "http" -> httpRequest(request, redirectCount)
+            "https" -> httpRequest(request, redirectCount)
+            "file" -> getFile(request.url)
+            "data" -> getData(request.url)
+            else -> throw Exception("Unknown scheme: ${request.url.scheme}")
         }
     }
 
     private fun httpRequest(
-        url: Url,
-        headers: Map<String, String>,
-        method: String,
-        body: String? = null,
+        request: Request,
         redirectCount: Int,
     ): Response {
-        if (body == null && url in cache && Instant.now().isBefore(cache[url]!!.first)) {
-            return cache[url]!!.second
+        if (request.body == null && request.url in cache && Instant.now().isBefore(cache[request.url]!!.first)) {
+            return cache[request.url]!!.second
         }
 
-        if (origin != null && url.origin != origin) {
+        if (origin != null && request.url.origin != origin) {
             socket?.close()
             socket = null
         }
@@ -105,62 +138,49 @@ class HttpClient {
         if (socket == null || socket?.isConnected != true || socket?.isClosed != false) {
             socket =
                 try {
-                    when (url.scheme) {
-                        "http" -> SocketFactory.getDefault().createSocket(url.host, url.port)
-                        "https" -> SSLSocketFactory.getDefault().createSocket(url.host, url.port)
-                        else -> throw Exception("Unknown scheme: ${url.scheme}")
+                    when (request.url.scheme) {
+                        "http" -> SocketFactory.getDefault().createSocket(request.url.host, request.url.port)
+                        "https" -> SSLSocketFactory.getDefault().createSocket(request.url.host, request.url.port)
+                        else -> throw Exception("Unknown scheme: ${request.url.scheme}")
                     }
                 } catch (_: UnknownHostException) {
-                    return Response.notFound("Unknown host.")
+                    return Response.notFound("Unknown host.", request.url)
                 }
-            origin = url.origin
+            origin = request.url.origin
         }
 
-        var request = "$method ${url.path} HTTP/1.1\r\n"
-        request += "Host: ${url.host}\r\n"
-        request += "Connection: keep-alive\r\n"
-        request += "User-Agent: MyBrowser/0.0\r\n"
+        val requestString = request.encode()
 
-        if (body != null) {
-            val length = body.encodeToByteArray().size
-            request += "Content-Length: $length\r\n"
-        }
-
-        headers.forEach { (key, value) ->
-            request += "$key: $value\r\n"
-        }
-        request += "\r\n"
-
-        if (body != null) {
-            request += body
-        }
-
-        logger.debug { "Send request to $url" }
+        logger.debug { "Send request to ${request.url}" }
 
         try {
-            socket!!.getOutputStream().write(request.toByteArray())
-            val response = parseResponse(socket!!.getInputStream())
+            socket!!.getOutputStream().write(requestString.toByteArray())
+            val response = parseResponse(socket!!.getInputStream(), request.method, request.url)
             if (response.status in 300..<400) {
-                val location = response.headers["location"] ?: return Response.badRequest("Missing location header.")
+                val location = response.headers["location"] ?: return Response.badRequest("Missing location header.", request.url)
                 val nextUrl =
                     if (location.startsWith("/")) {
-                        url.copy(path = location)
+                        request.url.copy(path = location)
                     } else {
                         Url(location)
                     }
-                return request(nextUrl, headers, method, body, redirectCount + 1)
+                return request(request.copy(url = nextUrl), redirectCount + 1)
             }
-            cacheResponse(url, response)
-            logger.info { "Received response: $response" }
+            cacheResponse(request.url, response)
+            logger.info { response.toString() }
             return response
         } catch (e: Exception) {
             socket?.close()
             socket = null
-            return Response.badRequest("Failed to connect to server: ${e.message}")
+            return Response.badRequest("Failed to connect to server: ${e.message}", request.url)
         }
     }
 
-    private fun parseResponse(inputStream: java.io.InputStream): Response {
+    private fun parseResponse(
+        inputStream: java.io.InputStream,
+        method: String,
+        url: Url,
+    ): Response {
         val statusLine = readLine(inputStream)
         val (_, status, reason) = statusLine.split(" ", limit = 3)
 
@@ -184,7 +204,7 @@ class HttpClient {
                 readBody(inputStream, length)
             }
 
-        return Response(status.toInt(), reason, headers, body)
+        return Response(status.toInt(), reason, headers, body, method, url)
     }
 
     private fun readBody(
@@ -255,16 +275,16 @@ class HttpClient {
     private fun getFile(url: Url): Response {
         try {
             val path = Path.of(url.path)
-            return Response.ok(Files.readString(path))
+            return Response.ok(Files.readString(path), mapOf(), url)
         } catch (_: Exception) {
-            return Response(404, "Not Found", mapOf(), "File not found.")
+            return Response.notFound("File not found.", url)
         }
     }
 
     private fun getData(url: Url): Response {
         val dataContent = url.dataContent
         if (',' !in dataContent) {
-            return Response.badRequest("Missing comma in data URL.")
+            return Response.badRequest("Missing comma in data URL.", url)
         }
 
         val (header, data) = dataContent.split(",", limit = 2)
@@ -274,6 +294,6 @@ class HttpClient {
             } else {
                 data
             }
-        return Response.ok(body)
+        return Response.ok(body, mapOf(), url)
     }
 }
